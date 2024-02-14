@@ -1,16 +1,21 @@
-|...+....1....+....2....+....3....+....4....+....5....+....6....+....7....+....8
-00010A*
-00020A* SAMPLE PHYSICAL FILE(CUSMSTP)
-00030A*
-00040A                                  (1) REF(MLGREFP)
-00050A     (2)  R CUSMST                    TEXT('Customer Master Record')
-00060A            ACTNUM    R  (3)
-00070A            NAME      R  (3)
-00080A            ADDR      R  (3)
-00090A            CITY      R  (3)
-00100A            STATE     R  (3)
-00110A            ZIP       R  (3)
-00120A     (4)    SEARCH        10  0
-00130A     (4)    CRDLMT         8  2
-00140A     (5)  K ACTNUM
-     A
+import psycopg2
+
+# Connect to your PostgreSQL database on a remote server
+conn = psycopg2.connect(host="5.199.162.56", port="5432", dbname="test_erp", user="postgres", password="test123")
+
+# Open a cursor to perform database operations
+cur = conn.cursor()
+
+# Execute a test query
+cur.execute("SELECT * FROM clients")
+
+# Retrieve query results
+records = cur.fetchall()
+
+# Finally, you may print the output to the console or use it anyway you like
+print(records)
+
+$(mimimi)
+
+for pin in pinpon
+	print(pin)

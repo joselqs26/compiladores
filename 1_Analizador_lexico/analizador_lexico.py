@@ -1,4 +1,28 @@
 import sys
+import shlex
+
+palabras_reservadas = [
+    "False", "class", "from", "or",
+    "None", "continue", "global", "pass",
+    "True", "def", "if", "raise",
+    "and", "del", "import", "return",
+    "as", "elif", "in", "try",
+    "assert", "else", "is", "while",
+    "async", "except", "lambda", "with",
+    "await", "finally", "nonlocal", "yield",
+    "break", "for", "not"
+]
+
+operadores = [
+    "+", "-","*","/","%","**","//",
+    ">","<","==",">=","<=","!=",
+    "&","|","^","~",">>","<<",
+    "=","+=","-=","*=","/=","%=","**=","//=","&=","|=","^=",">>=","<<=",
+]
+
+simbolos = [
+    "(", ")","{","}","[","]",":","$","!"
+]
 
 def leer_archivo(nombre_archivo):
     try:
@@ -15,16 +39,25 @@ def analizar_lex(texto):
     categorizacion = []
 
     for renglon in arr_renglones:
-        for caracter in renglon:
-            if caracter in '(){}[]':
-                categorizacion.append({
-                    caracter,
-                    'Sim'
-                })
+        tokens = shlex.shlex(renglon);
+        
+        for token in tokens:
+            print('{!r}'.format(token))
 
-    print( categorizacion )
-
+def categorizar_token(token):
+    categoria = ''
     
+    if token in palabras_reservadas:
+        categoria = 'Palabra reservada'
+    elif  token in operadores:
+        categoria = 'Operador'
+    elif  token in simbolos:
+        categoria = 'Simbolos especiales'
+
+    return {
+        "token": token,
+        "categoria": categoria,
+    }
 
 if __name__ == "__main__":
         nombre_archivo = sys.argv[1]

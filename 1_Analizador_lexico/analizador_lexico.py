@@ -1,5 +1,7 @@
 import sys
 import shlex
+import re
+import json
 
 palabras_reservadas = [
     "False", "class", "from", "or",
@@ -21,7 +23,7 @@ operadores = [
 ]
 
 simbolos = [
-    "(", ")","{","}","[","]",":","$","!"
+    "(", ")","{","}","[","]",":","$","!",".",","
 ]
 
 def leer_archivo(nombre_archivo):
@@ -42,17 +44,58 @@ def analizar_lex(texto):
         tokens = shlex.shlex(renglon);
         
         for token in tokens:
-            print('{!r}'.format(token))
+            categorizacion.append(
+                categorizar_token(token)
+            )
+    
+    json_string = json.dumps(categorizacion, indent=4)
+    print(json_string)
+
+def is_number_const(token):
+    reg_entero_float = re.compile('^-?\d+(\.\d+)?$')
+    reg_not_cientifica = re.compile('^-?\d+(\.\d+)?[eE][-+]?\d+$')
+    reg_complex = re.compile('^-?\d+(\.\d+)?[jJ]$')
+
+    val_entero_float = re.fullmatch(reg_entero_float, token)
+    val_not_cientifica = re.fullmatch(reg_not_cientifica, token)
+    val_complex = re.fullmatch(reg_complex, token)
+
+    return  val_entero_float is not None or val_not_cientifica is not None or val_complex is not None
+
+def is_string_const(token):
+    reg_double_quoute = re.compile('^"(?:\.|(\\\")|[^\""\n])*"$')
+    reg_single_quoute = re.compile("^'(?:\.|(\\\')|[^\''\n])*'$")
+
+    val_double_quoute = re.fullmatch(reg_double_quoute, token)
+    val_single_quoute = re.fullmatch(reg_single_quoute, token)
+
+    return  val_double_quoute is not None or val_single_quoute is not None
+
+def is_valid_identifier(token):
+    reg_identifier = re.compile('^([a-zA-Z]|_[a-zA-Z]){1}[a-zA-Z0-9_]*$')
+
+    val_identifier = re.fullmatch(reg_identifier, token)
+
+    return  val_identifier is not None
 
 def categorizar_token(token):
     categoria = ''
     
     if token in palabras_reservadas:
         categoria = 'Palabra reservada'
-    elif  token in operadores:
+    elif token in operadores:
         categoria = 'Operador'
-    elif  token in simbolos:
+    elif token in simbolos:
         categoria = 'Simbolos especiales'
+    elif is_number_const(token):
+        categoria = 'Const numerica'
+    elif is_string_const(token):
+        categoria = 'Const cadena'
+    elif is_valid_identifier(token):
+        categoria = 'Identificador'
+    else:
+        categoria = 'ERROR!'
+
 
     return {
         "token": token,

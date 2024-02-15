@@ -8,6 +8,8 @@ cur = conn.cursor()
 
 # Execute a test query
 cur.execute("SELECT * FROM clients")
+cur.execute("""SELECT * FROM clients""")
+cur.execute('SELECT * FROM clients')
 
 # Retrieve query results
 records = cur.fetchall()
@@ -19,3 +21,5 @@ $(mimimi)
 
 for pin in pinpon
 	print(pin)
+
+	if o == n

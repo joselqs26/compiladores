@@ -3,6 +3,9 @@ import shlex
 import re
 import json
 
+# TODO: AGRUPACIONES DE SIMBOLOS ESPECIALES
+# TODO: CARACTERES UNICODE
+
 palabras_reservadas = [
     "False", "class", "from", "or",
     "None", "continue", "global", "pass",
@@ -23,12 +26,12 @@ operadores = [
 ]
 
 simbolos = [
-    "(", ")","{","}","[","]",":","$","!",".",","
+    "(", ")","{","}","[","]",":","$","!",".",",","\t"
 ]
 
 def leer_archivo(nombre_archivo):
     try:
-        with open(nombre_archivo, 'r') as archivo:
+        with open(nombre_archivo, 'r', encoding='utf-8') as archivo:
             contenido = archivo.read()
             analizar_lex(contenido)
     except FileNotFoundError:
@@ -41,8 +44,19 @@ def analizar_lex(texto):
     categorizacion = []
 
     for renglon in arr_renglones:
-        tokens = shlex.shlex(renglon);
+        match = re.match(r'^\t+', renglon)
         
+        tokens = list( shlex.shlex(renglon, punctuation_chars="\n".join(operadores + simbolos)) );
+
+        if match and len(tokens) != 0:
+            tabs = len(match.group(0))
+
+            for i in range(0, tabs):
+                categorizacion.append({
+                    "token": "\t",
+                    "categoria": 'Simbolos especiales',
+                })
+
         for token in tokens:
             categorizacion.append(
                 categorizar_token(token)
@@ -72,7 +86,7 @@ def is_string_const(token):
     return  val_double_quoute is not None or val_single_quoute is not None
 
 def is_valid_identifier(token):
-    reg_identifier = re.compile('^([a-zA-Z]|_[a-zA-Z]){1}[a-zA-Z0-9_]*$')
+    reg_identifier = re.compile('^([a-zA-Z_]|_[a-zA-Z]){1}[a-zA-Z0-9_]*$')
 
     val_identifier = re.fullmatch(reg_identifier, token)
 

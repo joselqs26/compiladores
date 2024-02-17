@@ -6,6 +6,9 @@ import json
 # TODO: AGRUPACIONES DE SIMBOLOS ESPECIALES
 # TODO: CARACTERES UNICODE
 
+def sortFunc(e):
+  return len(e)
+
 palabras_reservadas = [
     "False", "class", "from", "or",
     "None", "continue", "global", "pass",
@@ -29,6 +32,10 @@ simbolos = [
     "(", ")","{","}","[","]",":","$","!",".",",","\t"
 ]
 
+operadores.sort(reverse=True, key=sortFunc)
+
+arr_rev = operadores + simbolos
+
 def leer_archivo(nombre_archivo):
     try:
         with open(nombre_archivo, 'r', encoding='utf-8') as archivo:
@@ -39,6 +46,23 @@ def leer_archivo(nombre_archivo):
     except Exception as e:
         print(f"Ocurrió un error al leer el archivo: {e}")
 
+def tokenizacion_rec( texto, num_simbol ):
+    if len(arr_rev) - 1 == num_simbol:
+        return [texto];
+
+    simbolo = arr_rev[num_simbol]
+
+    tokens = list( shlex.shlex(texto, punctuation_chars=simbolo) );
+
+    if len(tokens) == 1 and tokens[0] == simbolo:
+        return tokens
+    else:
+        arr_res = []
+        for token in tokens:
+            arr_res += tokenizacion_rec( token, num_simbol + 1 )
+        
+        return arr_res;
+
 def analizar_lex(texto):
     arr_renglones = texto.split('\n');
     categorizacion = []
@@ -46,21 +70,32 @@ def analizar_lex(texto):
     for renglon in arr_renglones:
         match = re.match(r'^\t+', renglon)
         
-        tokens = list( shlex.shlex(renglon, punctuation_chars="\n".join(operadores + simbolos)) );
+        tokens = list( shlex.shlex(renglon) );
 
         if match and len(tokens) != 0:
             tabs = len(match.group(0))
 
-            for i in range(0, tabs):
+            for _ in range(0, tabs):
                 categorizacion.append({
                     "token": "\t",
                     "categoria": 'Simbolos especiales',
                 })
 
         for token in tokens:
-            categorizacion.append(
-                categorizar_token(token)
-            )
+            reg_simbolos = re.compile('[\+\-\*\/\%\>\<\&\|\^\(\)\{\}\[\]\:\$\!\.\,\t]')
+            val_simbolos = re.fullmatch(reg_simbolos, token)
+
+            if val_simbolos is not None:
+                division = tokenizacion_rec(token, 0)
+
+                for token_ in division:
+                    categorizacion.append(
+                        categorizar_token(token_)
+                    )
+            else:
+                categorizacion.append(
+                    categorizar_token(token)
+                )
     
     json_string = json.dumps(categorizacion, indent=4)
     print(json_string)

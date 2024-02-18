@@ -3,9 +3,6 @@ import shlex
 import re
 import json
 
-# TODO: AGRUPACIONES DE SIMBOLOS ESPECIALES
-# TODO: CARACTERES UNICODE
-
 def sortFunc(e):
   return len(e)
 
@@ -39,8 +36,7 @@ arr_rev = operadores + simbolos
 def leer_archivo(nombre_archivo):
     try:
         with open(nombre_archivo, 'r', encoding='utf-8') as archivo:
-            contenido = archivo.read()
-            analizar_lex(contenido)
+            return archivo.read()
     except FileNotFoundError:
         print(f"El archivo '{nombre_archivo}' no fue encontrado.")
     except Exception as e:
@@ -52,7 +48,22 @@ def tokenizacion_rec( texto, num_simbol ):
 
     simbolo = arr_rev[num_simbol]
 
-    tokens = list( shlex.shlex(texto, punctuation_chars=simbolo) );
+    def separation( texto ):
+        if( not simbolo in texto ):
+            return [texto]
+        elif ( simbolo == texto ):
+            return [texto]
+
+        sep_tuple = texto.partition(simbolo);
+        sep_list = [i for i in sep_tuple if i != ''];
+    
+        arr_res = []
+        for item in sep_list:
+            arr_res += separation( item )
+
+        return arr_res
+
+    tokens = separation(texto);
 
     if len(tokens) == 1 and tokens[0] == simbolo:
         return tokens
@@ -70,7 +81,7 @@ def analizar_lex(texto):
     for renglon in arr_renglones:
         match = re.match(r'^\t+', renglon)
         
-        tokens = list( shlex.shlex(renglon) );
+        tokens = list( shlex.shlex(renglon, punctuation_chars="".join(arr_rev)) );
 
         if match and len(tokens) != 0:
             tabs = len(match.group(0))
@@ -83,7 +94,7 @@ def analizar_lex(texto):
 
         for token in tokens:
             reg_simbolos = re.compile('[\+\-\*\/\%\>\<\&\|\^\(\)\{\}\[\]\:\$\!\.\,\t]')
-            val_simbolos = re.fullmatch(reg_simbolos, token)
+            val_simbolos = re.match(reg_simbolos, token)
 
             if val_simbolos is not None:
                 division = tokenizacion_rec(token, 0)
@@ -98,7 +109,7 @@ def analizar_lex(texto):
                 )
     
     json_string = json.dumps(categorizacion, indent=4)
-    print(json_string)
+    return json_string
 
 def is_number_const(token):
     reg_entero_float = re.compile('^-?\d+(\.\d+)?$')
@@ -145,7 +156,6 @@ def categorizar_token(token):
     else:
         categoria = 'ERROR!'
 
-
     return {
         "token": token,
         "categoria": categoria,
@@ -153,4 +163,7 @@ def categorizar_token(token):
 
 if __name__ == "__main__":
         nombre_archivo = sys.argv[1]
-        leer_archivo(nombre_archivo)
+        contenido = leer_archivo(nombre_archivo)
+        json_string = analizar_lex(contenido)
+
+        print( json_string )

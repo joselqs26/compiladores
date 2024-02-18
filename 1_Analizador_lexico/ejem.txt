@@ -1,9 +1,9 @@
 import numpy as np
 
 dimension = 2
-tamaño = 8
+tamanio = 8
 decrement = 0.9
-matriz = np.asarray([np.random.random(dimension) for _ in range(tamaño)])
+matriz = np.asarray([np.random.random(dimension) for _ in range(tamanio)])
 print(matriz)
 minimo = np.amin(matriz[:,0])
 

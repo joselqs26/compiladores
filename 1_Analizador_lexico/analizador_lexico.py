@@ -108,8 +108,7 @@ def analizar_lex(texto):
                     categorizar_token(token)
                 )
     
-    json_string = json.dumps(categorizacion, indent=4)
-    return json_string
+    return categorizacion
 
 def is_number_const(token):
     reg_entero_float = re.compile('^-?\d+(\.\d+)?$')
@@ -165,5 +164,3 @@ if __name__ == "__main__":
         nombre_archivo = sys.argv[1]
         contenido = leer_archivo(nombre_archivo)
         json_string = analizar_lex(contenido)
-
-        print( json_string )

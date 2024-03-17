@@ -1,7 +1,6 @@
 import sys
 import shlex
 import re
-import json
 
 def sortFunc(e):
   return len(e)

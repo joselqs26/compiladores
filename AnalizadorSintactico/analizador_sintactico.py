@@ -3,7 +3,10 @@ from abc import ABC, abstractmethod;
 
 sys.path.append("/workspaces/compiladores/AnalizadorLexico")
 
-from analizador_lexico import analizar_lex, leer_archivo
+from analizador_lexico import analizar_lex, leer_archivo, CATEGORIA_PALABRA_CLAVE, CATEGORIA_OPERAADOR, CATEGORIA_SIMBOLO, CATEGORIA_NUMERO, CATEGORIA_CADENA, CATEGORIA_IDENTIFICADOR
+
+
+# Clases de definición 
 
 class Arbol(ABC):
         @abstractmethod
@@ -20,23 +23,79 @@ class Definicion(Arbol):
         nodo_asignado = None
         nodo_asignacion = None
         
-        def __init__(self, tipoGenerico, tipo):
-                self.tipoGenerico = tipoGenerico
+        def __init__(self, tipo):
                 self.tipo = tipo
+                
+        def set_nodo_asignado(self, nodo_asignado):
+                self.nodo_asignado = nodo_asignado
                 
         def set_nodo_siguiente(self, arg1):
                 self.nodo_asignacion = arg1
 
         def __str__(self):
-                cadena = self.tipo + "(nombre="+self.nodo_asignado+", definicion="+self.nodo_asignacion+")"
+                cadena = self.tipo + "(nombre="+self.nodo_asignado
                 return cadena
+
+
+class Importacion(Definicion):
+        alias = None
+        partes = []
         
+        def __init__(self):
+                super().__init__("Importacion")
+
+        def set_alias(self, alias):
+                self.alias = alias
+
+        def add_parte_importada(self, asignacion ):
+                self.partes.append( {
+                        'Asignacion': asignacion, 'Alias': None 
+                } )
+
+        def existe_modulo_asignado(self):
+                return not self.nodo_asignado is None
+
+        def existes_partes(self):
+                return len(self.partes) > 0
+
+        def esta_la_ultima_parte_sin_alias(self):
+                return self.partes[ len(self.partes) - 1 ]['Alias'] is None
+        
+        def asignar_alias_parte(self, alias ):
+                self.partes[ len(self.partes) - 1 ]['Alias'] = alias
+
+        def __str__(self):
+                cadena = super().__str__() 
+                
+                if self.alias:
+                       cadena += ',Alias=' + self.alias
+                if( len(self.partes) > 0 ):
+                        cadena += ",partes=["
+                        
+                        cadenas_partes = []
+                        
+                        for part in self.partes:
+                                cadena_part = 'Parte(nombre=' + part['Asignacion']
+                                if part['Alias']:
+                                        cadena_part += ',Alias=' + part['Alias']
+                                
+                                cadena_part += ')'
+                                cadenas_partes.append(cadena_part)
+                        
+                        cadena += ",".join( cadenas_partes )
+                        
+                        cadena += "]"
+                        
+                cadena += ")"
+                return cadena
+    
 class Clase(Definicion):
         atributos = []
         metodos = []
         
         def __init__(self, nombre):
-                Definicion.__init__(self, "Clase", nombre)
+                Definicion.__init__(self, "Clase")
+                Definicion.set_nodo_asignado( nombre )
                 Definicion.set_nodo_siguiente( self )
                 
         def __str__(self):
@@ -50,7 +109,7 @@ class Clase(Definicion):
                 for met in self.metodos:
                       cadena += str(met)
                       
-                cadena += "]"
+                cadena += "])"
 
                 return cadena
 
@@ -128,7 +187,58 @@ class Data():
 class Instruccion():
         tipo = None
 
+# Constructor de arbol
+
+class ConstructorArbolSintactico:
+        arbol_padre = None
+        token_anterior = None
+        nodo_actual = None
+        
+        def construir_arbol(self, token_arr):
+                for objToken in token_arr:
+                        
+                        if objToken['categoria'] == CATEGORIA_PALABRA_CLAVE:
+                                if objToken['token'] == 'from':
+                                        self.asignar_secuencia( Importacion() )
+                                elif objToken['token'] == 'import'and not isinstance( self.nodo_actual , Importacion):
+                                        self.asignar_secuencia( Importacion() )
+                                
+                        elif objToken['categoria'] == CATEGORIA_IDENTIFICADOR:
+                                if isinstance( self.nodo_actual , Importacion):
+                                        if self.token_anterior['token'] == 'from':
+                                                self.nodo_actual.set_nodo_asignado( objToken['token'] )
+                                        
+                                        elif self.token_anterior['token'] == 'import':
+                                                if self.nodo_actual.existe_modulo_asignado():
+                                                        self.nodo_actual.add_parte_importada( objToken['token'] )
+                                                else:
+                                                        self.nodo_actual.set_nodo_asignado( objToken['token'] )
+                                        
+                                        elif self.token_anterior['token'] == 'as':
+                                                if self.nodo_actual.existes_partes():
+                                                        self.nodo_actual.asignar_alias_parte( objToken['token'] )
+                                                else:
+                                                        self.nodo_actual.set_alias( objToken['token'] ) 
+                                        
+                                        elif self.token_anterior['token'] == ',':
+                                                self.nodo_actual.add_parte_importada( objToken['token'] )
+                                
+                        self.token_anterior = objToken;
+                
+                return self.arbol_padre
+                            
+        def asignar_secuencia(self, nodo):
+                if( self.arbol_padre is None ):
+                        self.arbol_padre = nodo
+                        self.nodo_actual = nodo
+                else:
+                        self.nodo_actual = nodo
+
 if __name__ == "__main__":
         nombre_archivo = sys.argv[1]
         contenido = leer_archivo(nombre_archivo)
         json_string = analizar_lex(contenido)
+        
+        constr = ConstructorArbolSintactico()
+        arbol = constr.construir_arbol(json_string)
+        print( arbol )

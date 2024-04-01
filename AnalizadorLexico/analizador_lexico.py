@@ -5,6 +5,13 @@ import re
 def sortFunc(e):
   return len(e)
 
+CATEGORIA_PALABRA_CLAVE = 'Palabra reservada'
+CATEGORIA_OPERAADOR = 'Operador'
+CATEGORIA_SIMBOLO = 'Simbolos especiales'
+CATEGORIA_NUMERO = 'Const numerica'
+CATEGORIA_CADENA = 'Const cadena'
+CATEGORIA_IDENTIFICADOR = 'Identificador'
+
 palabras_reservadas = [
     "False", "class", "from", "or",
     "None", "continue", "global", "pass",
@@ -140,17 +147,17 @@ def categorizar_token(token):
     categoria = ''
     
     if token in palabras_reservadas:
-        categoria = 'Palabra reservada'
+        categoria = CATEGORIA_PALABRA_CLAVE
     elif token in operadores:
-        categoria = 'Operador'
+        categoria = CATEGORIA_OPERAADOR
     elif token in simbolos:
-        categoria = 'Simbolos especiales'
+        categoria = CATEGORIA_SIMBOLO
     elif is_number_const(token):
-        categoria = 'Const numerica'
+        categoria = CATEGORIA_NUMERO
     elif is_string_const(token):
-        categoria = 'Const cadena'
+        categoria = CATEGORIA_CADENA
     elif is_valid_identifier(token):
-        categoria = 'Identificador'
+        categoria = CATEGORIA_IDENTIFICADOR
     else:
         categoria = 'ERROR!'
 

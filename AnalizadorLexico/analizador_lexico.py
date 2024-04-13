@@ -6,11 +6,12 @@ def sortFunc(e):
   return len(e)
 
 CATEGORIA_PALABRA_CLAVE = 'Palabra reservada'
-CATEGORIA_OPERAADOR = 'Operador'
+CATEGORIA_OPERADOR = 'Operador'
 CATEGORIA_SIMBOLO = 'Simbolos especiales'
 CATEGORIA_NUMERO = 'Const numerica'
 CATEGORIA_CADENA = 'Const cadena'
 CATEGORIA_IDENTIFICADOR = 'Identificador'
+CATEGORIA_FIN = 'Fin'
 
 palabras_reservadas = [
     "False", "class", "from", "or",
@@ -114,6 +115,11 @@ def analizar_lex(texto):
                     categorizar_token(token)
                 )
     
+        categorizacion.append({
+            "token": "",
+            "categoria": CATEGORIA_FIN,
+        })
+    
     return categorizacion
 
 def is_number_const(token):
@@ -149,7 +155,7 @@ def categorizar_token(token):
     if token in palabras_reservadas:
         categoria = CATEGORIA_PALABRA_CLAVE
     elif token in operadores:
-        categoria = CATEGORIA_OPERAADOR
+        categoria = CATEGORIA_OPERADOR
     elif token in simbolos:
         categoria = CATEGORIA_SIMBOLO
     elif is_number_const(token):

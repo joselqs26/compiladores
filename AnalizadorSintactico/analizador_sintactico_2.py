@@ -51,7 +51,9 @@ def analizar_codigo(expresion_analizada, level):
         
     # DEFINICION DE FUNCION
     elif type(expresion_analizada) == ast.FunctionDef:
-        arbol_func = Tree( expresion_analizada.name, level )
+        name_function = 'Funcion - ' + expresion_analizada.name
+        
+        arbol_func = Tree( name_function , level )
         
         arbol_func.addNode( 
             analizar_codigo( expresion_analizada.args, level + 1 )
@@ -178,19 +180,29 @@ def analizar_codigo(expresion_analizada, level):
     
     # OPERACION BINARIA
     elif type(expresion_analizada) == ast.BinOp:
-        operacion = ""
-        
-        if type(expresion_analizada.op) == ast.And: operacion = "And"
-        elif type(expresion_analizada.op) == ast.Or: operacion = "Or"
-        
         arbol_op = Tree( 
-            operacion, 
+            "Operacion binaria", 
             level 
         )
         
-        for item in expresion_analizada.values:
-            arbolSec = analizar_codigo( item, level + 1 )
-            arbol_op.addNode( arbolSec )
+        operacion = ""
+        
+        if type(expresion_analizada.op) == ast.Add: operacion = "Suma"
+        elif type(expresion_analizada.op) == ast.Sub: operacion = "Resta"
+        elif type(expresion_analizada.op) == ast.Mult: operacion = "Multiplica"
+        elif type(expresion_analizada.op) == ast.Div: operacion = "Divide"
+        elif type(expresion_analizada.op) == ast.FloorDiv: operacion = "And"
+        elif type(expresion_analizada.op) == ast.Mod: operacion = "Modulo de"
+        elif type(expresion_analizada.op) == ast.Pow: operacion = "Potencia"
+        elif type(expresion_analizada.op) == ast.MatMult: operacion = "Multiplica matematicamente"
+        
+        arbol_left = analizar_codigo( expresion_analizada.left, level + 1 )
+        arbol_op.addNode( arbol_left )
+        
+        arbol_op.addNode( Node( str(operacion) , level + 1 ) )
+        
+        arbol_right = analizar_codigo( expresion_analizada.right, level + 1 )
+        arbol_op.addNode( arbol_right )
             
         valor = arbol_op
     
@@ -209,20 +221,27 @@ def analizar_codigo(expresion_analizada, level):
             level 
         )
         
-        # TODO - Terminar Interno Tupla -> Operaciones binarias
-        
-        # for item in expresion_analizada.elts:
-        #     arbolSec = analizar_codigo( item, level + 1 )
-        #     arbol_tp.addNode( arbolSec )
+        for item in expresion_analizada.elts:
+            arbolSec = analizar_codigo( item, level + 1 )
+            arbol_tp.addNode( arbolSec )
             
         valor = arbol_tp
     
+    elif type(expresion_analizada) == ast.Call:
+        arbol_call = Tree( 
+            'Llamada a ' + expresion_analizada.func.id, 
+            level 
+        )
+        
+        for item in expresion_analizada.args:
+            nodo = analizar_codigo( item, level + 1 )
+            arbol_call.addNode( nodo )
+            
+        valor = arbol_call
+    
     elif type(expresion_analizada) == ast.Expr:
         # Llamada a la función - Padre
-        pass
-    elif type(expresion_analizada) == ast.Call:
-        # Llamada a la función - Interno
-        pass
+        valor = analizar_codigo( expresion_analizada.value, level )
     
     return valor
 

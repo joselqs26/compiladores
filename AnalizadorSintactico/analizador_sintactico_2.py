@@ -206,6 +206,22 @@ def analizar_codigo(expresion_analizada, level):
             
         valor = arbol_op
     
+    # ASIGNACIONES
+    elif type(expresion_analizada) == ast.Assign:
+        arbol_asign = Tree( 
+            "Asignacion", 
+            level 
+        )
+        
+        for item in expresion_analizada.targets:
+            arbolSec = analizar_codigo( item, level + 1 )
+            arbol_asign.addNode( arbolSec )
+        
+        arbolSec = analizar_codigo( expresion_analizada.value, level + 1 )
+        arbol_asign.addNode( arbolSec )
+        
+        valor = arbol_asign
+    
     # NOMBRE / VARIABLE
     elif type(expresion_analizada) == ast.Name:
         valor = Node( expresion_analizada.id, level )
@@ -227,6 +243,38 @@ def analizar_codigo(expresion_analizada, level):
             
         valor = arbol_tp
     
+    # LISTA
+    elif type(expresion_analizada) == ast.List:
+        arbol_lst = Tree( 
+            'Lista', 
+            level 
+        )
+        
+        for item in expresion_analizada.elts:
+            arbolSec = analizar_codigo( item, level + 1 )
+            arbol_lst.addNode( arbolSec )
+            
+        valor = arbol_lst
+    
+    # DICCIONARIO
+    elif type(expresion_analizada) == ast.Dict:
+        arbol_dict = Tree( 
+            'Diccionario', 
+            level 
+        )
+        
+        for ind in range( len( expresion_analizada.keys ) ):
+            
+            key_n = expresion_analizada.keys[ ind ]
+            arbol_dict.addNode( analizar_codigo( key_n, level + 1 ) )
+            
+            if ind < len( expresion_analizada.values ):
+                value_n = expresion_analizada.values[ ind ]
+                arbol_dict.addNode( analizar_codigo( value_n, level + 2 ) )
+            
+        valor = arbol_dict
+
+    # INVOCACIÓN
     elif type(expresion_analizada) == ast.Call:
         arbol_call = Tree( 
             'Llamada a ' + expresion_analizada.func.id, 
@@ -246,12 +294,27 @@ def analizar_codigo(expresion_analizada, level):
     return valor
 
 if __name__ == "__main__":
-        contenido = '''def factorial( n: int, n2: int ) -> int :
-    if n == 0 or n == 1:
-        return 1;
-    return "la respuesta es" , n * factorial( n - 1 );
+        contenido = '''def calcular_suma(a: int, b: int) -> int:
+    resultado = a + b
+    return resultado
 
-print( factorial(9) )'''
+def es_par(numero:int) -> int:
+    return numero % 2 == 0
+
+def listar_numeros_pares(lista: list) -> list:
+    pares = []
+    for num in lista:
+        if es_par(num):
+            pares.append(num)
+    return pares
+
+# Ejemplo de uso de las funciones
+suma = calcular_suma(5, 3)
+print("La suma es:", suma)
+
+numeros = [1, 2, 3, 4, 5, 6]
+pares = listar_numeros_pares(numeros)
+print("Números pares en la lista:", pares)'''
         expresion_analizada = ast.parse(contenido)
         
         arbol = analizar_codigo(expresion_analizada, 0)

@@ -1,0 +1,129 @@
+Module(
+    body=[
+        FunctionDef(
+            name='suma',
+            args=arguments(
+                posonlyargs=[],
+                args=[
+                    arg(
+                        arg='a',
+                        annotation=Name(id='int', ctx=Load())),
+                    arg(
+                        arg='b',
+                        annotation=Name(id='int', ctx=Load()))],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[]),
+            body=[
+                Assign(
+                    targets=[
+                        Name(id='variable_suma', ctx=Store())],
+                    value=Constant(value=65431)),
+                Return(
+                    value=BinOp(
+                        left=Name(id='a', ctx=Load()),
+                        op=Add(),
+                        right=Name(id='b', ctx=Load())))],
+            decorator_list=[],
+            returns=Name(id='int', ctx=Load())),
+        FunctionDef(
+            name='mensaje',
+            args=arguments(
+                posonlyargs=[],
+                args=[
+                    arg(
+                        arg='nombre',
+                        annotation=Name(id='str', ctx=Load()))],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[]),
+            body=[
+                Assign(
+                    targets=[
+                        Name(id='variable_mensaje', ctx=Store())],
+                    value=Constant(value='hola')),
+                Return(
+                    value=BinOp(
+                        left=Constant(value='Hola, '),
+                        op=Add(),
+                        right=Name(id='nombre', ctx=Load())))],
+            decorator_list=[],
+            returns=Name(id='str', ctx=Load())),
+        Assign(
+            targets=[
+                Name(id='numero', ctx=Store())],
+            value=Constant(value=10)),
+        Assign(
+            targets=[
+                Name(id='flotante', ctx=Store())],
+            value=Constant(value=3.14)),
+        Assign(
+            targets=[
+                Name(id='texto', ctx=Store())],
+            value=Constant(value='Python')),
+        Assign(
+            targets=[
+                Name(id='lista', ctx=Store())],
+            value=List(
+                elts=[
+                    Constant(value=1),
+                    Constant(value=2),
+                    Constant(value=3)],
+                ctx=Load())),
+        Assign(
+            targets=[
+                Name(id='diccionario', ctx=Store())],
+            value=Dict(
+                keys=[
+                    Constant(value='clave')],
+                values=[
+                    Constant(value='valor')])),
+        Assign(
+            targets=[
+                Name(id='tupla', ctx=Store())],
+            value=Tuple(
+                elts=[
+                    Constant(value=1),
+                    Constant(value=2),
+                    Constant(value=3)],
+                ctx=Load())),
+        Assign(
+            targets=[
+                Name(id='booleano', ctx=Store())],
+            value=Constant(value=True)),
+        Assign(
+            targets=[
+                Name(id='resultado_suma', ctx=Store())],
+            value=Call(
+                func=Name(id='suma', ctx=Load()),
+                args=[
+                    Constant(value=5),
+                    Constant(value=3)],
+                keywords=[])),
+        Assign(
+            targets=[
+                Name(id='resultado_dos', ctx=Store())],
+            value=BinOp(
+                left=Constant(value=5),
+                op=Add(),
+                right=Constant(value=3))),
+        Assign(
+            targets=[
+                Name(id='texto', ctx=Store())],
+            value=BinOp(
+                left=Constant(value='deñe'),
+                op=Add(),
+                right=Constant(value='dmk'))),
+        Assign(
+            targets=[
+                Name(id='saludo', ctx=Store())],
+            value=Call(
+                func=Name(id='mensaje', ctx=Load()),
+                args=[
+                    Constant(value='Mundo')],
+                keywords=[])),
+        Assign(
+            targets=[
+                Name(id='valor', ctx=Store())],
+            value=Constant(value=True))],
+    type_ignores=[])

@@ -15,27 +15,54 @@ class AnalizadorSemantic:
     def visit(self, nodo, ambito):
         if isinstance(nodo, ast.FunctionDef):
             for arg in nodo.args.args:
-                self.agregar_variable(arg.arg, arg.annotation.id, nodo.name)  
-                
+                if isinstance(arg.annotation, ast.Name):
+                    self.agregar_variable(arg.arg, arg.annotation.id, nodo.name) 
+                elif isinstance(arg.annotation, ast.Subscript): 
+                    tipo_dato = self.obtener_tipo_subscript(arg.annotation)
+                    self.agregar_variable(arg.arg, f"list[{tipo_dato}]", nodo.name) 
+                    
             ambito = nodo.name 
 
             for statement in nodo.body:
                 if isinstance(statement, ast.Return):
-                    tipo_dato_retorno = nodo.returns.id if nodo.returns else "None"
-                    name_function = nodo.name
-                    return_function = tipo_dato_retorno
-                    self.functions.append({"name": name_function, "type": return_function})
-                    
+                    if isinstance(arg.annotation, ast.Name):
+                        tipo_dato_retorno = nodo.returns.id if nodo.returns else "None"
+                        name_function = nodo.name
+                        return_function = tipo_dato_retorno
+                        self.functions.append({"name": name_function, "type": return_function})
+                    elif isinstance(arg.annotation, ast.Subscript): 
+                        name_function = nodo.name
+                        tipo_dato = self.obtener_tipo_subscript(arg.annotation)
+                        self.functions.append({"name": name_function, "type": f"list[{tipo_dato}]"})
+
+                elif isinstance(statement, ast.AnnAssign):
+                    if isinstance(statement.target, ast.Name):
+                        if isinstance(statement.annotation, ast.Name):
+                            self.agregar_variable(statement.target.id, statement.annotation.id, ambito)
+                        elif isinstance(statement.annotation, ast.Subscript):
+                            tipo_dato = self.obtener_tipo_subscript(statement.annotation)
+                            self.agregar_variable(statement.target.id, f"list[{tipo_dato}]", ambito)
+                        
+
         elif isinstance(nodo, ast.Assign):
             for target in nodo.targets:
+
                 if isinstance(target, ast.Name):
                     valor = nodo.value
                     tipo_dato = self.obtener_tipo_dato(valor)
-                    self.agregar_variable(target.id, tipo_dato, ambito)  
+                    self.agregar_variable(target.id, tipo_dato, ambito)   
   
         for child_node in ast.iter_child_nodes(nodo):
             self.visit(child_node, ambito)
 
+    def obtener_tipo_subscript(self, tipo_subscript):
+        if isinstance(tipo_subscript.slice, ast.Name):
+            return tipo_subscript.slice.id
+        elif isinstance(tipo_subscript.slice, ast.Subscript):
+            return f"list[{self.obtener_tipo_subscript(tipo_subscript.slice.id)}]"
+        else:
+            return "None"
+    
     def agregar_variable(self, nombre, tipo, ambito_actual):
         self.tabla_simbolos.append({"variable": nombre, "type": tipo, "scope": ambito_actual})
 
@@ -45,7 +72,11 @@ class AnalizadorSemantic:
         elif isinstance(valor, ast.Num):
             return type(valor.n).__name__
         elif isinstance(valor, ast.List):
-            return "list"
+            if valor.elts:
+                tipos_elementos = {self.obtener_tipo_dato(el) for el in valor.elts}
+                return f"list[{tipos_elementos.pop()}]"
+            else:
+                return "list"
         elif isinstance(valor, ast.Dict):
             return "dict"
         elif isinstance(valor, ast.Tuple):

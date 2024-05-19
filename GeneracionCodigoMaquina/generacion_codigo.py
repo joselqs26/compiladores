@@ -297,15 +297,15 @@ def analizar_codigo(expresion_analizada, level):
     return valor
 
 if __name__ == "__main__":
-        contenido = '''def calcular_suma(a: int, b: int) -> int:
+        contenido = '''def calcular_suma(a: float, b: int) -> int:
     resultado = a + b
     return resultado
 
 def es_par(numero:int) -> int:
     return numero % 2 == 0
 
-def listar_numeros_pares(lista: list) -> list:
-    pares = []
+def listar_numeros_pares(lista: list[float]) -> list[float]:
+    pares: List[int] = [] 
     for num in lista:
         if es_par(num):
             pares.append(num)
@@ -319,6 +319,7 @@ numeros = [1, 2, 3, 4, 5, 6]
 pares = listar_numeros_pares(numeros)
 print("Números pares en la lista:", pares)'''
         expresion_analizada = ast.parse(contenido)
+        print(ast.dump(expresion_analizada))
         
         #arbol = analizar_codigo(expresion_analizada, 0)
         #arbol.print()

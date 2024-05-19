@@ -3,7 +3,7 @@ import ast
 #from analizador_sintactico import AnalizadorSintactico
 from prettytable import PrettyTable
 
-class AnalizadorSemantico:
+class AnalizadorSemantic:
     def __init__(self):
         self.tabla_simbolos = []
         self.functions = []
@@ -78,6 +78,17 @@ class AnalizadorSemantico:
             tabla.add_row([simbolo["variable"], simbolo["type"], simbolo["scope"]]) 
 
         print(tabla)
+
+    def obtener_informacion_variable(self, name):
+        for simbolo in self.tabla_simbolos:
+                if simbolo["variable"] == name:
+                    return {'name': simbolo["variable"], 'type': simbolo["type"], 'scope': simbolo["scope"]}
+                
+    def obtener_informacion_funciones(self, name):
+        for simbolo in self.functions:
+                if simbolo["name"] == name:
+                    return {'name': simbolo["name"], 'type': simbolo["type"]}            
+
 
 # analizador_sintactico = AnalizadorSintactico()
 # analizador_semantico = AnalizadorSemantico()

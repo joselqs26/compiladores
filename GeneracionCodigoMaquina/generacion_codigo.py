@@ -1,10 +1,11 @@
 import llvmlite;
 import sys;
+import os;
 import ast
 
-sys.path.append("/workspaces/compiladores/AnalizadorSemantico")
+sys.path.append(os.path.abspath(os.path.dirname("c:/Users/emeli/Downloads/Personal (1)/U/COMPILADORES/compiladores/AnalizadorSemantico")))
 
-from analizador_semantico import AnalizadorSemantico
+from AnalizadorSemantico.analizador_semantico import AnalizadorSemantic
 
 spacedBase = '  '
 
@@ -319,13 +320,14 @@ pares = listar_numeros_pares(numeros)
 print("Números pares en la lista:", pares)'''
         expresion_analizada = ast.parse(contenido)
         
-        arbol = analizar_codigo(expresion_analizada, 0)
-        arbol.print()
+        #arbol = analizar_codigo(expresion_analizada, 0)
+        #arbol.print()
         
-        # analizador_semantico = AnalizadorSemantico()
+        analizador_semantico = AnalizadorSemantic()
         # arbol_abstracto = analizador_sintactico.analizar_codigo("codigo_tres.txt")
-        # analizador_semantico.analizar(expresion_analizada)
-        # print( analizador_semantico.tabla_simbolos )
+        analizador_semantico.analizar(expresion_analizada)
+        print(analizador_semantico.obtener_informacion_variable('a'))
+        print(analizador_semantico.obtener_informacion_funciones('es_par'))
         
         #print(ast.dump(expresion_analizada, indent=4))
         

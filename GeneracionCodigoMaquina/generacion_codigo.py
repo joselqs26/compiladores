@@ -1,8 +1,10 @@
-# import ply.yacc as yacc
+import llvmlite;
 import sys;
 import ast
 
-sys.path.append("/workspaces/compiladores/AnalizadorLexico")
+sys.path.append("/workspaces/compiladores/AnalizadorSemantico")
+
+from analizador_semantico import AnalizadorSemantico
 
 spacedBase = '  '
 
@@ -319,6 +321,11 @@ print("Números pares en la lista:", pares)'''
         
         arbol = analizar_codigo(expresion_analizada, 0)
         arbol.print()
+        
+        # analizador_semantico = AnalizadorSemantico()
+        # arbol_abstracto = analizador_sintactico.analizar_codigo("codigo_tres.txt")
+        # analizador_semantico.analizar(expresion_analizada)
+        # print( analizador_semantico.tabla_simbolos )
         
         #print(ast.dump(expresion_analizada, indent=4))
         

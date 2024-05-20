@@ -1,20 +1,59 @@
 Cuerpo principal
-  Funcion - suma
+  Funcion - calcular_suma
     Args
       arg - a
       arg - b
     Cuerpo de Función
-      Return
+      Asignacion
+        resultado
         Operacion binaria
           a
           Suma
           b
-  Funcion - mensaje
+      Return
+        resultado
+  Funcion - es_par
     Args
-      arg - nombre
+      arg - numero
     Cuerpo de Función
       Return
-        Operacion binaria
-          Hola, 
-          Suma
-          nombre
+        Comparacion
+          Operacion binaria
+            numero
+            Modulo de
+            2
+          igual a
+          0
+  Funcion - listar_numeros_pares
+    Args
+      arg - lista
+    Cuerpo de Función
+      Asignacion
+        pares
+        Lista
+      Return
+        pares
+  Asignacion
+    suma
+    Llamada a calcular_suma
+      5
+      3
+  Llamada a print
+    La suma es:
+    suma
+  Asignacion
+    numeros
+    Lista
+      1
+      2
+      3
+      4
+      5
+      6
+  Asignacion
+    pares
+    Llamada a listar_numeros_pares
+      numeros
+  Llamada a print
+    Números pares en la lista:
+    pares

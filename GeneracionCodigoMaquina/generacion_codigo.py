@@ -1,300 +1,221 @@
-import llvmlite;
+from llvmlite import ir
 import sys;
-import os;
 import ast
+import random
+import string
 
-sys.path.append(os.path.abspath(os.path.dirname("c:/Users/emeli/Downloads/Personal (1)/U/COMPILADORES/compiladores/AnalizadorSemantico")))
+sys.path.append("/workspaces/compiladores/AnalizadorSemantico")
 
-from AnalizadorSemantico.analizador_semantico import AnalizadorSemantic
+from analizador_semantico import AnalizadorSemantico
 
-spacedBase = '  '
+class UniqueVariableNameGenerator:
+    def __init__(self):
+        self.generated_names = set()
+        self.alphabet = string.ascii_letters + string.digits
 
-class Tree():
-    def __init__(self, name, level):
-        self.name = name
-        self.nodes = []
-        self.level = level
-        
-    def addNode(self, n ):
-        self.nodes.append( n )
-        
-    def print(self):
-        tabArr = [spacedBase] * self.level
-        tabStr = "".join( tabArr )
-        
-        print( tabStr + self.name )
-        
-        for n in self.nodes:
-            n.print()
+    def generate_name(self, length=8):
+        while True:
+            name = self._random_name(length)
+            if name not in self.generated_names:
+                self.generated_names.add(name)
+                return name
 
-class Node():
-    def __init__(self, name, level):
-        self.name = name
-        self.level = level
-        
-    def print(self):
-        tabArr = [spacedBase] * self.level
-        tabStr = "".join( tabArr )
-        
-        print( tabStr + self.name )
+    def _random_name(self, length):
+        # First character must be a letter or an underscore
+        first_char = random.choice(string.ascii_letters + '_')
+        # Remaining characters can be letters, digits, or underscores
+        remaining_chars = ''.join(random.choices(self.alphabet + '_', k=length-1))
+        return first_char + remaining_chars
 
-def analizar_codigo(expresion_analizada, level):
-    valor = None
+class GeneradorCodigo:
+    analizador_semantico = None
+    expresion_general = None
+    generator = UniqueVariableNameGenerator()
     
-    # CUERPO PRINCIPAL
-    if type(expresion_analizada) == ast.Module:
-        arbol = Tree( "Cuerpo principal", level )
+    def __init__(self, expresion_general) -> None:
+        self.expresion_general = expresion_general
+        analizador_semantico = AnalizadorSemantico()
+        analizador_semantico.analizar(self.expresion_general)
+        self.analizador_semantico = analizador_semantico
+
+    def get_ir_type(self, string_type, lenght = 0):
+        if string_type == "int":
+            return ir.IntType(32)
+        elif string_type == "str":
+            return ir.ArrayType(ir.IntType(8), lenght)
+        elif "list" in string_type:
+            type_interno = string_type.replace( "list[", '' ).replace( "]", '' )
+            return ir.ArrayType( self.get_ir_type(type_interno) , lenght)
+
+    def generar_codigo(self, expresion_analizada, modulo, variables_disponibles = {}):
+        valor = None
         
-        for item in expresion_analizada.body:
-            arbolSec = analizar_codigo( item, level + 1 )
-            if not arbolSec is None: 
-                arbol.addNode( arbolSec )
-        
-        valor = arbol
-        
-    # DEFINICION DE FUNCION
-    elif type(expresion_analizada) == ast.FunctionDef:
-        name_function = 'Funcion - ' + expresion_analizada.name
-        
-        arbol_func = Tree( name_function , level )
-        
-        arbol_func.addNode( 
-            analizar_codigo( expresion_analizada.args, level + 1 )
-        )
-        
-        arbol_func_cuerpo = Tree( 'Cuerpo de Función', level + 1 )
-        for item in expresion_analizada.body:
-            arbolSec = analizar_codigo( item, level + 2 )
+        # CUERPO PRINCIPAL
+        if type(expresion_analizada) == ast.Module:
+            pass
+        # DEFINICION DE FUNCION
+        elif type(expresion_analizada) == ast.FunctionDef:
+            funcion_semantica = self.analizador_semantico.obtener_informacion_variable( item.arg )
+            tipo_retorno = self.get_ir_type( funcion_semantica["type"] )
+            tipos_argumentos = self.generar_codigo( expresion_analizada.args, modulo)
             
-            if not arbolSec is None: 
-                arbol_func_cuerpo.addNode( arbolSec )
-        
-        arbol_func.addNode( arbol_func_cuerpo )
-        
-        valor = arbol_func
-        
-    # ARGUMENTOS DE FUNCION
-    elif type(expresion_analizada) == ast.arguments:        
-        arbol_arg = Tree( 'Args', level )
-        
-        for item in expresion_analizada.args:
-            nodo = Node( f'arg - { item.arg }', level + 1 )
-            arbol_arg.addNode( nodo )
-        
-        if( not (expresion_analizada.kwarg is None) ):
-            nodo = Node( f'kwarg - { expresion_analizada.kwarg }', level + 1 )
-            arbol_arg.addNode( nodo )
-        
-        valor = arbol_arg
-        
-    # RETORNO
-    elif type(expresion_analizada) == ast.Return:
-        arbol_rt = Tree( 
-            'Return', 
-            level 
-        )
-        
-        arbolSec = analizar_codigo( expresion_analizada.value , level + 1 )
-        arbol_rt.addNode( arbolSec )
-        
-        valor = arbol_rt
-        
-    # ESTRUCTURA DE CONTROL - IF
-    elif type(expresion_analizada) == ast.If:
-        arbol_if_gen = Tree( 'Estructura de control IF', level )
-        
-        arbol_if = Tree( 'Condición', level + 1 )
-        arbol_if.addNode( analizar_codigo( expresion_analizada.test, level + 2 ) )
-        
-        arbol_if_cuerpo = Tree( 'Cuerpo de Condición', level + 1 )
-        for item in expresion_analizada.body:
-            arbolSec = analizar_codigo( item, level + 2 )
+            funcion_tipo = ir.FunctionType(tipo_retorno, tipos_argumentos)
+            funcion = ir.Function(modulo, funcion_tipo, name=expresion_analizada.name)
             
-            if not arbolSec is None: 
-                arbol_if_cuerpo.addNode( arbolSec )
+            variables_disponibles_fn = {}
+            
+            for index in range(len(expresion_analizada.args)):
+                arg_semantico = expresion_analizada.args[index]
                 
-        arbol_if_gen.addNode( arbol_if )
-        arbol_if_gen.addNode( arbol_if_cuerpo )
-        
-        valor = arbol_if_gen
-        
-    # COMPARACION / Tipo AND o Tipo OR
-    elif type(expresion_analizada) == ast.Compare:
-        arbol_com = Tree( 
-            'Comparacion', 
-            level 
-        )
-        
-        arbolSec = analizar_codigo( expresion_analizada.left, level + 1 )
-        arbol_com.addNode( arbolSec )
-        
-        for ind in range( len( expresion_analizada.comparators ) ):
-            if ind < len( expresion_analizada.ops ):
-
-                operator = expresion_analizada.ops[ ind ]
+                arg_generado = funcion.args[index]
+                arg_generado.name = arg_semantico.arg
                 
-                # FORMAS DE COMPARACION
-                if type( operator ) == ast.Eq:
-                    arbol_com.addNode( Node('igual a', level + 1) )
-                elif type( operator ) == ast.NotEq:
-                    arbol_com.addNode( Node('no igual a', level + 1) )
-                elif type( operator ) == ast.Lt:
-                    arbol_com.addNode( Node('menor a', level + 1) )
-                elif type( operator ) == ast.LtE:
-                    arbol_com.addNode( Node('menor o igual a', level + 1) )
-                elif type( operator ) == ast.Gt:
-                    arbol_com.addNode( Node('mayor a', level + 1) )
-                elif type( operator ) == ast.GtE:
-                    arbol_com.addNode( Node('mayor o igual a', level + 1) )
-                elif type( operator ) == ast.Is:
-                    arbol_com.addNode( Node('es', level + 1) )
-                elif type( operator ) == ast.IsNot:
-                    arbol_com.addNode( Node('no es', level + 1) )
-                elif type( operator ) == ast.In:
-                    arbol_com.addNode( Node('en', level + 1) )
-                elif type( operator ) == ast.NotIn:
-                    arbol_com.addNode( Node('no en', level + 1) )
+                variables_disponibles_fn[ arg_semantico.arg ] = arg_generado.name
             
-            # VALORES DE COMPARACION
-            comp = expresion_analizada.comparators[ ind ]
+            bloque = funcion.append_basic_block(name="Cuerpo de Funcion")
+            constructor = ir.IRBuilder(bloque)
             
-            arbolSec = analizar_codigo( comp, level + 1 )
-            arbol_com.addNode( arbolSec )
-    
-        valor = arbol_com
-        
-    # OPERACION BOOLEANA
-    elif type(expresion_analizada) == ast.BoolOp:
-        operacion = ""
-        
-        if type(expresion_analizada.op) == ast.And: operacion = "And"
-        elif type(expresion_analizada.op) == ast.Or: operacion = "Or"
-        
-        arbol_op = Tree( 
-            operacion, 
-            level 
-        )
-        
-        for item in expresion_analizada.values:
-            arbolSec = analizar_codigo( item, level + 1 )
-            arbol_op.addNode( arbolSec )
+            for item in expresion_analizada.body:
+                dict_arg = {**variables_disponibles,**variables_disponibles_fn};
+                
+                self.generar_codigo( item, constructor, variables_disponibles=dict_arg)
             
-        valor = arbol_op
-    
-    # OPERACION BINARIA
-    elif type(expresion_analizada) == ast.BinOp:
-        arbol_op = Tree( 
-            "Operacion binaria", 
-            level 
-        )
-        
-        operacion = ""
-        
-        if type(expresion_analizada.op) == ast.Add: operacion = "Suma"
-        elif type(expresion_analizada.op) == ast.Sub: operacion = "Resta"
-        elif type(expresion_analizada.op) == ast.Mult: operacion = "Multiplica"
-        elif type(expresion_analizada.op) == ast.Div: operacion = "Divide"
-        elif type(expresion_analizada.op) == ast.FloorDiv: operacion = "And"
-        elif type(expresion_analizada.op) == ast.Mod: operacion = "Modulo de"
-        elif type(expresion_analizada.op) == ast.Pow: operacion = "Potencia"
-        elif type(expresion_analizada.op) == ast.MatMult: operacion = "Multiplica matematicamente"
-        
-        arbol_left = analizar_codigo( expresion_analizada.left, level + 1 )
-        arbol_op.addNode( arbol_left )
-        
-        arbol_op.addNode( Node( str(operacion) , level + 1 ) )
-        
-        arbol_right = analizar_codigo( expresion_analizada.right, level + 1 )
-        arbol_op.addNode( arbol_right )
+            valor = funcion
             
-        valor = arbol_op
-    
-    # ASIGNACIONES
-    elif type(expresion_analizada) == ast.Assign:
-        arbol_asign = Tree( 
-            "Asignacion", 
-            level 
-        )
-        
-        for item in expresion_analizada.targets:
-            arbolSec = analizar_codigo( item, level + 1 )
-            arbol_asign.addNode( arbolSec )
-        
-        arbolSec = analizar_codigo( expresion_analizada.value, level + 1 )
-        arbol_asign.addNode( arbolSec )
-        
-        valor = arbol_asign
-    
-    # NOMBRE / VARIABLE
-    elif type(expresion_analizada) == ast.Name:
-        valor = Node( expresion_analizada.id, level )
-    
-    # VALOR CONSTANTE
-    elif type(expresion_analizada) == ast.Constant:
-        valor = Node( str(expresion_analizada.value) , level )
-    
-    # TUPLA
-    elif type(expresion_analizada) == ast.Tuple:
-        arbol_tp = Tree( 
-            'Tupla', 
-            level 
-        )
-        
-        for item in expresion_analizada.elts:
-            arbolSec = analizar_codigo( item, level + 1 )
-            arbol_tp.addNode( arbolSec )
+        # ARGUMENTOS DE FUNCION
+        elif type(expresion_analizada) == ast.arguments:        
+            ls_tipos_argumentos = []
             
-        valor = arbol_tp
-    
-    # LISTA
-    elif type(expresion_analizada) == ast.List:
-        arbol_lst = Tree( 
-            'Lista', 
-            level 
-        )
+            for item in expresion_analizada.args:
+                variable_semantica = self.analizador_semantico.obtener_informacion_variable( item.arg )
+                tipo_variable = self.get_ir_type( variable_semantica["type"] )
+                ls_tipos_argumentos.append( tipo_variable )
+            
+            tipos_argumentos = tuple(ls_tipos_argumentos)
+            
+            valor = tipos_argumentos
+            
+        # RETORNO
+        elif type(expresion_analizada) == ast.Return:
+            pass
+            
+        # ESTRUCTURA DE CONTROL - IF
+        elif type(expresion_analizada) == ast.If:
+            pass
+            
+        # COMPARACION / Tipo AND o Tipo OR
+        elif type(expresion_analizada) == ast.Compare:
+            pass
+            
+        # OPERACION BOOLEANA
+        elif type(expresion_analizada) == ast.BoolOp:
+            pass
         
-        for item in expresion_analizada.elts:
-            arbolSec = analizar_codigo( item, level + 1 )
-            arbol_lst.addNode( arbolSec )
-            
-        valor = arbol_lst
-    
-    # DICCIONARIO
-    elif type(expresion_analizada) == ast.Dict:
-        arbol_dict = Tree( 
-            'Diccionario', 
-            level 
-        )
-        
-        for ind in range( len( expresion_analizada.keys ) ):
-            
-            key_n = expresion_analizada.keys[ ind ]
-            arbol_dict.addNode( analizar_codigo( key_n, level + 1 ) )
-            
-            if ind < len( expresion_analizada.values ):
-                value_n = expresion_analizada.values[ ind ]
-                arbol_dict.addNode( analizar_codigo( value_n, level + 2 ) )
-            
-        valor = arbol_dict
+        # OPERACION BINARIA
+        elif type(expresion_analizada) == ast.BinOp:
+            if type(expresion_analizada.op) == ast.Add: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
 
-    # INVOCACIÓN
-    elif type(expresion_analizada) == ast.Call:
-        arbol_call = Tree( 
-            'Llamada a ' + expresion_analizada.func.id, 
-            level 
-        )
-        
-        for item in expresion_analizada.args:
-            nodo = analizar_codigo( item, level + 1 )
-            arbol_call.addNode( nodo )
+                if left_var['type'] == 'float' or right_var['type'] == 'float':
+                    pass
+                elif left_var['type'] == 'int' or right_var['type'] == 'int':
+                    pass
+
+            elif type(expresion_analizada.op) == ast.Sub: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+
+            elif type(expresion_analizada.op) == ast.Mult: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+
+            elif type(expresion_analizada.op) == ast.Div: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+
+            elif type(expresion_analizada.op) == ast.FloorDiv: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+            elif type(expresion_analizada.op) == ast.Mod: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+
+            elif type(expresion_analizada.op) == ast.Pow: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+
+            elif type(expresion_analizada.op) == ast.MatMult: 
+                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+
+
+
             
-        valor = arbol_call
-    
-    elif type(expresion_analizada) == ast.Expr:
-        # Llamada a la función - Padre
-        valor = analizar_codigo( expresion_analizada.value, level )
-    
-    return valor
+        # ASIGNACIONES
+        elif type(expresion_analizada) == ast.Assign:
+            var_name = self.generar_codigo( expresion_analizada.value, modulo, variables_disponibles=dict_arg)
+
+        # NOMBRE / VARIABLE
+        elif type(expresion_analizada) == ast.Name:
+            valor = self.analizador_semantico.obtener_informacion_variable( expresion_analizada.id )
+        
+        # VALOR CONSTANTE
+        elif type(expresion_analizada) == ast.Constant:
+            type_calc = ""
+            
+            if isinstance(valor, ast.Str):
+                type_calc = "str"
+            elif isinstance(valor, ast.Num):
+                type_calc = type(valor.n).__name__
+            elif isinstance(valor, ast.List):
+                type_calc = "list"
+            elif isinstance(valor, ast.Dict):
+                type_calc = "dict"
+            elif isinstance(valor, ast.Tuple):
+                type_calc = "tuple"
+                
+            ir_type = None
+            
+            if isinstance(valor, ast.Str):
+                ir_type = self.get_ir_type( type_calc, len(expresion_analizada.value) )
+            else:
+                ir_type = self.get_ir_type( type_calc )
+            
+            valor = ir.Constant( ir_type , expresion_analizada.value)
+            
+        # TUPLA
+        elif type(expresion_analizada) == ast.Tuple:
+            pass
+        
+        # LISTA
+        elif type(expresion_analizada) == ast.List:
+            pass
+        
+        # DICCIONARIO
+        elif type(expresion_analizada) == ast.Dict:
+            pass
+
+        # INVOCACIÓN
+        elif type(expresion_analizada) == ast.Call:
+            pass
+        
+        elif type(expresion_analizada) == ast.Expr:
+            pass
+        
+        return valor
 
 if __name__ == "__main__":
         contenido = '''def calcular_suma(a: float, b: int) -> int:
@@ -318,17 +239,19 @@ print("La suma es:", suma)
 numeros = [1, 2, 3, 4, 5, 6]
 pares = listar_numeros_pares(numeros)
 print("Números pares en la lista:", pares)'''
+
+        modulo = ir.Module(name="modulo_principal")
+
         expresion_analizada = ast.parse(contenido)
         print(ast.dump(expresion_analizada))
         
-        #arbol = analizar_codigo(expresion_analizada, 0)
-        #arbol.print()
+        genCode = GeneradorCodigo()
+        genCode.generar_codigo(expresion_analizada, modulo, 0)
         
-        analizador_semantico = AnalizadorSemantic()
-        # arbol_abstracto = analizador_sintactico.analizar_codigo("codigo_tres.txt")
-        analizador_semantico.analizar(expresion_analizada)
-        print(analizador_semantico.obtener_informacion_variable('a'))
-        print(analizador_semantico.obtener_informacion_funciones('es_par'))
+        # analizador_semantico = AnalizadorSemantico()
+        # arbol_abstracto = analizador_sintactico.generar_codigo("codigo_tres.txt")
+        # analizador_semantico.analizar(expresion_analizada)
+        # print( analizador_semantico.tabla_simbolos )
         
         #print(ast.dump(expresion_analizada, indent=4))
         

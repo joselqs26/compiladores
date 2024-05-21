@@ -8,29 +8,9 @@ sys.path.append("/workspaces/compiladores/AnalizadorSemantico")
 
 from analizador_semantico import AnalizadorSemantico
 
-class UniqueVariableNameGenerator:
-    def __init__(self):
-        self.generated_names = set()
-        self.alphabet = string.ascii_letters + string.digits
-
-    def generate_name(self, length=8):
-        while True:
-            name = self._random_name(length)
-            if name not in self.generated_names:
-                self.generated_names.add(name)
-                return name
-
-    def _random_name(self, length):
-        # First character must be a letter or an underscore
-        first_char = random.choice(string.ascii_letters + '_')
-        # Remaining characters can be letters, digits, or underscores
-        remaining_chars = ''.join(random.choices(self.alphabet + '_', k=length-1))
-        return first_char + remaining_chars
-
 class GeneradorCodigo:
     analizador_semantico = None
     expresion_general = None
-    generator = UniqueVariableNameGenerator()
     
     def __init__(self, expresion_general) -> None:
         self.expresion_general = expresion_general
@@ -47,7 +27,7 @@ class GeneradorCodigo:
             type_interno = string_type.replace( "list[", '' ).replace( "]", '' )
             return ir.ArrayType( self.get_ir_type(type_interno) , lenght)
 
-    def generar_codigo(self, expresion_analizada, modulo, variables_disponibles = {}):
+    def generar_codigo(self, expresion_analizada, modulo, variables_disponibles = {}, asignacion = None ):
         valor = None
         
         # CUERPO PRINCIPAL
@@ -55,7 +35,7 @@ class GeneradorCodigo:
             pass
         # DEFINICION DE FUNCION
         elif type(expresion_analizada) == ast.FunctionDef:
-            funcion_semantica = self.analizador_semantico.obtener_informacion_variable( item.arg )
+            funcion_semantica = self.analizador_semantico.obtener_informacion_funciones( expresion_analizada.name )
             tipo_retorno = self.get_ir_type( funcion_semantica["type"] )
             tipos_argumentos = self.generar_codigo( expresion_analizada.args, modulo)
             
@@ -116,11 +96,17 @@ class GeneradorCodigo:
             if type(expresion_analizada.op) == ast.Add: 
                 left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
                 right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
-
-                if left_var['type'] == 'float' or right_var['type'] == 'float':
-                    pass
-                elif left_var['type'] == 'int' or right_var['type'] == 'int':
-                    pass
+                
+                if type( left_var.type ) == ir.FloatType or type( right_var.type ) == ir.FloatType:
+                    if asignacion is None:
+                        valor = modulo.fadd( left_var, right_var )
+                    elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
+                        valor = modulo.fadd( left_var, right_var, name=asignacion )
+                elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
+                    if asignacion is None:
+                        valor = modulo.add( left_var, right_var )
+                    elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
+                        valor = modulo.add( left_var, right_var, name=asignacion )
 
             elif type(expresion_analizada.op) == ast.Sub: 
                 left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
@@ -166,11 +152,12 @@ class GeneradorCodigo:
             
         # ASIGNACIONES
         elif type(expresion_analizada) == ast.Assign:
-            var_name = self.generar_codigo( expresion_analizada.value, modulo, variables_disponibles=dict_arg)
+            var_gen = self.generar_codigo( expresion_analizada.value, modulo, variables_disponibles=dict_arg)
+            
 
         # NOMBRE / VARIABLE
         elif type(expresion_analizada) == ast.Name:
-            valor = self.analizador_semantico.obtener_informacion_variable( expresion_analizada.id )
+            valor = variables_disponibles[ expresion_analizada.id ]
         
         # VALOR CONSTANTE
         elif type(expresion_analizada) == ast.Constant:
@@ -221,24 +208,24 @@ if __name__ == "__main__":
         contenido = '''def calcular_suma(a: float, b: int) -> int:
     resultado = a + b
     return resultado
+'''
+    # def es_par(numero:int) -> int:
+    #     return numero % 2 == 0
 
-def es_par(numero:int) -> int:
-    return numero % 2 == 0
+    # def listar_numeros_pares(lista: list[float]) -> list[float]:
+    #     pares: List[int] = [] 
+    #     for num in lista:
+    #         if es_par(num):
+    #             pares.append(num)
+    #     return pares
 
-def listar_numeros_pares(lista: list[float]) -> list[float]:
-    pares: List[int] = [] 
-    for num in lista:
-        if es_par(num):
-            pares.append(num)
-    return pares
+    # # Ejemplo de uso de las funciones
+    # suma = calcular_suma(5, 3)
+    # print("La suma es:", suma)
 
-# Ejemplo de uso de las funciones
-suma = calcular_suma(5, 3)
-print("La suma es:", suma)
-
-numeros = [1, 2, 3, 4, 5, 6]
-pares = listar_numeros_pares(numeros)
-print("Números pares en la lista:", pares)'''
+    # numeros = [1, 2, 3, 4, 5, 6]
+    # pares = listar_numeros_pares(numeros)
+    # print("Números pares en la lista:", pares)
 
         modulo = ir.Module(name="modulo_principal")
 

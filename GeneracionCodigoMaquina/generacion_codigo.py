@@ -27,7 +27,7 @@ class GeneradorCodigo:
             type_interno = string_type.replace( "list[", '' ).replace( "]", '' )
             return ir.ArrayType( self.get_ir_type(type_interno) , lenght)
 
-    def generar_codigo(self, expresion_analizada, modulo, variables_disponibles = {}, asignacion = None ):
+    def generar_codigo(self, expresion_analizada, dependencia, variables_disponibles = {}, asignacion = None ):
         valor = None
         
         # CUERPO PRINCIPAL
@@ -37,10 +37,10 @@ class GeneradorCodigo:
         elif type(expresion_analizada) == ast.FunctionDef:
             funcion_semantica = self.analizador_semantico.obtener_informacion_funciones( expresion_analizada.name )
             tipo_retorno = self.get_ir_type( funcion_semantica["type"] )
-            tipos_argumentos = self.generar_codigo( expresion_analizada.args, modulo)
+            tipos_argumentos = self.generar_codigo( expresion_analizada.args, dependencia)
             
             funcion_tipo = ir.FunctionType(tipo_retorno, tipos_argumentos)
-            funcion = ir.Function(modulo, funcion_tipo, name=expresion_analizada.name)
+            funcion = ir.Function(dependencia, funcion_tipo, name=expresion_analizada.name)
             
             variables_disponibles_fn = {}
             
@@ -94,65 +94,65 @@ class GeneradorCodigo:
         # OPERACION BINARIA
         elif type(expresion_analizada) == ast.BinOp:
             if type(expresion_analizada.op) == ast.Add: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
                 
                 if type( left_var.type ) == ir.FloatType or type( right_var.type ) == ir.FloatType:
                     if asignacion is None:
-                        valor = modulo.fadd( left_var, right_var )
+                        valor = dependencia.fadd( left_var, right_var )
                     elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
-                        valor = modulo.fadd( left_var, right_var, name=asignacion )
+                        valor = dependencia.fadd( left_var, right_var, name=asignacion )
                 elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
                     if asignacion is None:
-                        valor = modulo.add( left_var, right_var )
+                        valor = dependencia.add( left_var, right_var )
                     elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
-                        valor = modulo.add( left_var, right_var, name=asignacion )
+                        valor = dependencia.add( left_var, right_var, name=asignacion )
 
             elif type(expresion_analizada.op) == ast.Sub: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
 
             elif type(expresion_analizada.op) == ast.Mult: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
 
             elif type(expresion_analizada.op) == ast.Div: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
 
             elif type(expresion_analizada.op) == ast.FloorDiv: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
             elif type(expresion_analizada.op) == ast.Mod: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
 
             elif type(expresion_analizada.op) == ast.Pow: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
 
             elif type(expresion_analizada.op) == ast.MatMult: 
-                left_var = self.generar_codigo( expresion_analizada.left, modulo, variables_disponibles)
-                right_var = self.generar_codigo( expresion_analizada.right, modulo, variables_disponibles)
+                left_var = self.generar_codigo( expresion_analizada.left, dependencia, variables_disponibles)
+                right_var = self.generar_codigo( expresion_analizada.right, dependencia, variables_disponibles)
 
 
 
             
         # ASIGNACIONES
         elif type(expresion_analizada) == ast.Assign:
-            var_gen = self.generar_codigo( expresion_analizada.value, modulo, variables_disponibles=dict_arg)
+            var_gen = self.generar_codigo( expresion_analizada.value, dependencia, variables_disponibles=dict_arg)
             
 
         # NOMBRE / VARIABLE
@@ -227,13 +227,13 @@ if __name__ == "__main__":
     # pares = listar_numeros_pares(numeros)
     # print("Números pares en la lista:", pares)
 
-        modulo = ir.Module(name="modulo_principal")
+        dependencia = ir.Module(name="dependencia_principal")
 
         expresion_analizada = ast.parse(contenido)
         print(ast.dump(expresion_analizada))
         
         genCode = GeneradorCodigo()
-        genCode.generar_codigo(expresion_analizada, modulo, 0)
+        genCode.generar_codigo(expresion_analizada, dependencia, 0)
         
         # analizador_semantico = AnalizadorSemantico()
         # arbol_abstracto = analizador_sintactico.generar_codigo("codigo_tres.txt")

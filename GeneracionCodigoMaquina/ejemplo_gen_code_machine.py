@@ -25,7 +25,11 @@ bloque = funcion.append_basic_block(name="entrada")
 constructor = ir.IRBuilder(bloque)
 
 # Sumar los argumentos de la función.
-resultado = constructor.add(x, y, name ="resultado")
+resultado = constructor.add(x, y, name="resultado")
+
+# Retornar el resultado.
+# constructor.ret(resultado)
 
 # Imprimir el módulo LLVM generado.
 print( type( resultado ) )
+print( resultado.name )

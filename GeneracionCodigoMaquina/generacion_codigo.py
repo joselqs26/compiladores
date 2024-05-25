@@ -109,23 +109,71 @@ class GeneradorCodigo:
             
         # ESTRUCTURA DE CONTROL - IF
         elif type(expresion_analizada) == ast.If:
-            pass
+            condicion = self.generar_codigo(expresion_analizada.test, dependencia)
+            then_block = dependencia.append_basic_block(name="then")
+            else_block = dependencia.append_basic_block(name="else")
+            merge_block = dependencia.append_basic_block(name="ifcont")
+            dependencia.cbranch(condicion, then_block, else_block)
+
+            # Genera el código para el bloque 'then'
+            dependencia.position_at_end(then_block)
+            for item in expresion_analizada.body:
+                self.generar_codigo(item, dependencia)
+            dependencia.branch(merge_block)
+
+            # Genera el código para el bloque 'else'
+            dependencia.position_at_end(else_block)
+            for item in expresion_analizada.orelse:
+                self.generar_codigo(item, dependencia)
+            dependencia.branch(merge_block)
+
+            # Continúa con el bloque de merge
+            dependencia.position_at_end(merge_block)
             
         # COMPARACION / Tipo AND o Tipo OR
         elif type(expresion_analizada) == ast.Compare:
+            left_val = self.generar_codigo(expresion_analizada.left, dependencia)
+
+            for operation, right in zip(expresion_analizada.ops, expresion_analizada.comparators):
+                right_val = self.generar_codigo(right, dependencia)
+
+                if isinstance(operation, ast.Eq):
+                    valor = dependencia.icmp_signed('==', left_val, right_val)
+                elif isinstance(operation, ast.NotEq):
+                    valor = dependencia.icmp_signed('!=', left_val, right_val)
+                elif isinstance(operation, ast.Lt):
+                    valor = dependencia.icmp_signed('<', left_val, right_val)
+                elif isinstance(operation, ast.LtE):
+                    valor = dependencia.icmp_signed('<=', left_val, right_val)
+                elif isinstance(operation, ast.Gt):
+                    valor = dependencia.icmp_signed('>', left_val, right_val)
+                elif isinstance(operation, ast.GtE):
+                    valor = dependencia.icmp_signed('>=', left_val, right_val)
             pass
             
         # OPERACION BOOLEANA
         elif type(expresion_analizada) == ast.BoolOp:
+            if isinstance(expresion_analizada.op, ast.And):
+                initial = self.generar_codigo(expresion_analizada.values[0], dependencia)
+                for value in expresion_analizada.values[1:]:
+                    next_val = self.generar_codigo(value, dependencia)
+                    initial = dependencia.and_(initial, next_val)
+                valor = initial
+            elif isinstance(expresion_analizada.op, ast.Or):
+                initial = self.generar_codigo(expresion_analizada.values[0], dependencia)
+                for value in expresion_analizada.values[1:]:
+                    next_val = self.generar_codigo(value, dependencia)
+                    initial = dependencia.or_(initial, next_val)
+                valor = initial
             pass
         
         # OPERACION BINARIA
         elif type(expresion_analizada) == ast.BinOp:
             
+            left_var = self.generar_codigo( expresion_analizada.left, dependencia)
+            right_var = self.generar_codigo( expresion_analizada.right, dependencia)
             # Operación Suma
             if type(expresion_analizada.op) == ast.Add: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
                 
                 # Suma de Float
                 if type( left_var.type ) == ir.FloatType or type( right_var.type ) == ir.FloatType:
@@ -152,33 +200,53 @@ class GeneradorCodigo:
                         # Registro de operación suma con asignación a variable
                         valor = dependencia.add( left_var, right_var, name=asignacion )
 
-            elif type(expresion_analizada.op) == ast.Sub: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
+
+            elif type(expresion_analizada.op) == ast.Sub:
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    if type(left_var.type) == ir.IntType:
+                        left_var = dependencia.sitofp(left_var, ir.FloatType())
+                    if type(right_var.type) == ir.IntType:
+                        right_var = dependencia.sitofp(right_var, ir.FloatType())
+                    valor = dependencia.fsub(left_var, right_var, name=asignacion) if asignacion else dependencia.fsub(left_var, right_var)
+                else:
+                    valor = dependencia.sub(left_var, right_var, name=asignacion) if asignacion else dependencia.sub(left_var, right_var)
+
+
+            elif type(expresion_analizada.op) == ast.Mult:
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    if type(left_var.type) == ir.IntType:
+                        left_var = dependencia.sitofp(left_var, ir.FloatType())
+                    if type(right_var.type) == ir.IntType:
+                        right_var = dependencia.sitofp(right_var, ir.FloatType())
+                    valor = dependencia.fmul(left_var, right_var, name=asignacion) if asignacion else dependencia.fmul(left_var, right_var)
+                else:
+                    valor = dependencia.mul(left_var, right_var, name=asignacion) if asignacion else dependencia.mul(left_var, right_var)
+
+
+            elif type(expresion_analizada.op) == ast.Div:
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    if type(left_var.type) == ir.IntType:
+                        left_var = dependencia.sitofp(left_var, ir.FloatType())
+                    if type(right_var.type) == ir.IntType:
+                        right_var = dependencia.sitofp(right_var, ir.FloatType())
+                    valor = dependencia.fdiv(left_var, right_var, name=asignacion) if asignacion else dependencia.fdiv(left_var, right_var)
+                else:
+                    valor = dependencia.sdiv(left_var, right_var, name=asignacion) if asignacion else dependencia.sdiv(left_var, right_var)
 
 
 
-            elif type(expresion_analizada.op) == ast.Mult: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
+            elif type(expresion_analizada.op) == ast.FloorDiv:
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    raise TypeError("Floor division no es compatible con float.")
+                else:
+                    valor = dependencia.sdiv(left_var, right_var, name=asignacion) if asignacion else dependencia.sdiv(left_var, right_var)
 
 
-
-            elif type(expresion_analizada.op) == ast.Div: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-
-            elif type(expresion_analizada.op) == ast.FloorDiv: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-            elif type(expresion_analizada.op) == ast.Mod: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
+            elif type(expresion_analizada.op) == ast.Mod:
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    raise TypeError("Modulo no es compatible con float.")
+                else:
+                    valor = dependencia.srem(left_var, right_var, name=asignacion) if asignacion else dependencia.srem(left_var, right_var)
 
 
             elif type(expresion_analizada.op) == ast.Pow: 
@@ -197,20 +265,37 @@ class GeneradorCodigo:
         # ASIGNACIONES
         elif type(expresion_analizada) == ast.Assign:
             
-            # Se obtiene información referente al target de asignación (VER VARIABLE)
-            target = self.generar_codigo( expresion_analizada.targets[0], dependencia )
-            
-            if type(target) == str:
+            target = self.generar_codigo(expresion_analizada.targets[0], dependencia)
+        
+            if isinstance(target, str):
                 # Si el target es un string puro, debe generase su código y agregarse como variable disponible            
-                valor = self.generar_codigo( expresion_analizada.value, dependencia, asignacion=target)    
-                self.variables_disponibles[ target ] = valor
+                valor = self.generar_codigo(expresion_analizada.value, dependencia, asignacion=target)
+                
+                # Registro de la variable en el diccionario
+                ir_type = self.get_ir_type(self.analizador_semantico.obtener_informacion_variable(target)["type"])
+                alloca = dependencia.alloca(ir_type, name=target)
+                dependencia.store(valor, alloca)
+                self.variables_disponibles[target] = alloca
                 
             else:
                 # Si el target es una clase más compleja como una variable existente,
-                # debe generase su código, y posteriormente actualizar la variable disponible de forma inmediata
-                valor = self.generar_codigo( expresion_analizada.value, dependencia, asignacion=target.name)
-                self.variables_disponibles[ target.name ] = valor
+                # debe generarse su código, y posteriormente actualizar la variable disponible de forma inmediata
+                valor = self.generar_codigo(expresion_analizada.value, dependencia, asignacion=target.name)
+                self.variables_disponibles[target.name] = valor
             
+        # ASIGNACIONES ANOTADAS
+        elif type(expresion_analizada) == ast.AnnAssign:
+            # Obtener el nombre del target y su tipo
+            target = expresion_analizada.target.id
+            tipo_anotado = self.get_ir_type(expresion_analizada.annotation.id)
+            
+            # Generar el valor a asignar
+            valor = self.generar_codigo(expresion_analizada.value, dependencia, asignacion=target)
+            
+            # Registrar la variable en el diccionario de variables disponibles
+            alloca = dependencia.alloca(tipo_anotado, name=target)
+            dependencia.store(valor, alloca)
+            self.variables_disponibles[target] = alloca
 
         # NOMBRE / VARIABLE
         elif type(expresion_analizada) == ast.Name:
@@ -225,28 +310,41 @@ class GeneradorCodigo:
         
         # VALOR CONSTANTE
         elif type(expresion_analizada) == ast.Constant:
-            type_calc = ""
+            # type_calc = ""
             
-            # Retorna un objeto constante de tipo IR correspondiente
-            if isinstance(valor, ast.Str):
-                type_calc = "str"
-            elif isinstance(valor, ast.Num):
-                type_calc = type(valor.n).__name__
-            elif isinstance(valor, ast.List):
-                type_calc = "list"
-            elif isinstance(valor, ast.Dict):
-                type_calc = "dict"
-            elif isinstance(valor, ast.Tuple):
-                type_calc = "tuple"
+            # # Retorna un objeto constante de tipo IR correspondiente
+            # if isinstance(valor, ast.Str):
+            #     type_calc = "str"
+            # elif isinstance(valor, ast.Num):
+            #     type_calc = type(valor.n).__name__
+            # elif isinstance(valor, ast.List):
+            #     type_calc = "list"
+            # elif isinstance(valor, ast.Dict):
+            #     type_calc = "dict"
+            # elif isinstance(valor, ast.Tuple):
+            #     type_calc = "tuple"
                 
-            ir_type = None
+            # ir_type = None
             
-            if isinstance(valor, ast.Str):
-                ir_type = self.get_ir_type( type_calc, len(expresion_analizada.value) )
-            else:
-                ir_type = self.get_ir_type( type_calc )
+            # if isinstance(valor, ast.Str):
+            #     ir_type = self.get_ir_type( type_calc, len(expresion_analizada.value) )
+            # else:
+            #     ir_type = self.get_ir_type( type_calc )
             
-            valor = ir.Constant( ir_type , expresion_analizada.value)
+            # valor = ir.Constant( ir_type , expresion_analizada.value)
+            type_calc = ""
+            if isinstance(expresion_analizada.value, str):
+                type_calc = "str"
+            elif isinstance(expresion_analizada.value, (int, float)):
+                type_calc = type(expresion_analizada.value).__name__
+            elif isinstance(expresion_analizada.value, list):
+                type_calc = "list"
+            elif isinstance(expresion_analizada.value, dict):
+                type_calc = "dict"
+            elif isinstance(expresion_analizada.value, tuple):
+                type_calc = "tuple"
+            ir_type = self.get_ir_type(type_calc, len(expresion_analizada.value) if type_calc == "str" else 0)
+            valor = ir.Constant(ir_type, expresion_analizada.value)
             
         # TUPLA
         elif type(expresion_analizada) == ast.Tuple:
@@ -266,12 +364,21 @@ class GeneradorCodigo:
         
         elif type(expresion_analizada) == ast.Expr:
             valor = self.generar_codigo( expresion_analizada.value, dependencia )
-
         return valor
 
 if __name__ == "__main__":
+
         contenido = '''def calcular_suma(a: float, b: int) -> float:
     resultado = a + b
+    return resultado
+
+'''
+        contenido2 = '''def calcular_suma(a: float, b: int) -> float:
+    resultado:float = 0.0
+    if a > b:
+        resultado = a - b
+    else:
+        resultado = a + b
     return resultado
 '''
     # def es_par(numero:int) -> int:

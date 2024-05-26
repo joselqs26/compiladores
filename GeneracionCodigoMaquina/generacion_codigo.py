@@ -25,16 +25,18 @@ class GeneradorCodigo:
 
     # Función de tranformación - Convierte el tipo de la tabla de simbolos
     # al tip correspondiente de la librería IR    
-    def get_ir_type(self, string_type, lenght = 0):
+    def get_ir_type(self, string_type, length = 0):
         if string_type == "int":
             return ir.IntType(32)
         if string_type == "float":
             return ir.FloatType()
         elif string_type == "str":
-            return ir.ArrayType(ir.IntType(8), lenght)
+            return ir.ArrayType(ir.IntType(8), length)
         elif "list" in string_type:
             type_interno = string_type.replace( "list[", '' ).replace( "]", '' )
-            return ir.ArrayType( self.get_ir_type(type_interno) , lenght)
+            return ir.ArrayType( self.get_ir_type(type_interno) , length)
+        elif "dict" in string_type:
+            return ir.PointerType(ir.IntType(8))  # Simplification for a dictionary type
 
     # Función de cohersion de tipos - Convierte una variable dada 
     # de un tipo a otro en el flujo del programa
@@ -71,51 +73,74 @@ class GeneradorCodigo:
         
         # DEFINICION DE FUNCION
         elif type(expresion_analizada) == ast.FunctionDef:
-            
             # Se obtiene el tipo de retorno de la función
-            funcion_semantica = self.analizador_semantico.obtener_informacion_funciones( expresion_analizada.name )
-            
+            funcion_semantica = self.analizador_semantico.obtener_informacion_funciones(expresion_analizada.name)
             # Se obtiene el tipo como objeto de librería IR
-            tipo_retorno = self.get_ir_type( funcion_semantica["type"] )
-            
+            tipo_retorno = self.get_ir_type(funcion_semantica["type"])
             # Se obtiene el listado de tipos de los argumentos
-            tipos_argumentos = self.generar_codigo( expresion_analizada.args, dependencia)
-            
+            tipos_argumentos = self.generar_codigo(expresion_analizada.args, dependencia)
             # Genera la firma de la función
             funcion_tipo = ir.FunctionType(tipo_retorno, tipos_argumentos)
-            
             # Genera la estructura de la función en el contexto
             funcion = ir.Function(dependencia, funcion_tipo, name=expresion_analizada.name)
+            
+            # Crear el bloque inicial para las asignaciones
+            bloque_inicio = funcion.append_basic_block(name="entry")
+            constructor = ir.IRBuilder(bloque_inicio)
             
             # Itera por los argumentos para agregarlos como variables disponibles
             for index in range(len(expresion_analizada.args.args)):
                 arg_semantico = expresion_analizada.args.args[index]
-                
                 arg_generado = funcion.args[index]
                 arg_generado.name = arg_semantico.arg
                 
-                self.variables_disponibles[ arg_semantico.arg ] = arg_generado
-            
-            # Se crea el contexto para la ejecución de la función
+                # Asignar los argumentos de la función
+                if isinstance(arg_generado.type, ir.ArrayType):
+                    # Convertir ArrayType a PointerType
+                    arg_type = ir.PointerType(arg_generado.type.element)
+                    arg_alloca = constructor.alloca(arg_type.pointee, name=arg_generado.name)
+                    arg_generado_ptr = constructor.bitcast(arg_generado, arg_type)
+                else:
+                    arg_alloca = constructor.alloca(arg_generado.type, name=arg_generado.name)
+                    arg_generado_ptr = arg_generado
+                
+                constructor.store(arg_generado_ptr, arg_alloca)
+                self.variables_disponibles[arg_semantico.arg] = arg_alloca
+
+            # Crear el bloque para el cuerpo de la función
             bloque = funcion.append_basic_block(name="Cuerpo de Funcion")
-            constructor = ir.IRBuilder(bloque)
+            constructor.position_at_end(bloque)
             
             # Se genera el código para cada apartado independiente del cuerpo de la función
             for item in expresion_analizada.body:
-                self.generar_codigo( item, constructor )
+                self.generar_codigo(item, constructor)
             
             valor = funcion
             
         # ARGUMENTOS DE FUNCION
         elif type(expresion_analizada) == ast.arguments:        
             ls_tipos_argumentos = []
-            
-            # Cálcula el tipo IR para cada argumento de una función
+
+            # Calcula el tipo IR para cada argumento de una función
             for item in expresion_analizada.args:
-                variable_semantica = self.analizador_semantico.obtener_informacion_variable( item.arg )
-                tipo_variable = self.get_ir_type( variable_semantica["type"] )
-                ls_tipos_argumentos.append( tipo_variable )
-            
+                variable_semantica = self.analizador_semantico.obtener_informacion_variable(item.arg)
+                tipo_variable = self.get_ir_type(variable_semantica["type"])
+                
+                # Convertir ArrayType a PointerType
+                if isinstance(tipo_variable, ir.ArrayType):
+                    tipo_variable = ir.PointerType(tipo_variable.element)
+                
+                # Manejar diccionarios
+                if "dict" in variable_semantica["type"]:
+                    key_type, value_type = variable_semantica["type"].replace("dict[", "").replace("]", "").split(", ")
+                    key_ir_type = self.get_ir_type(key_type)
+                    value_ir_type = self.get_ir_type(value_type)
+                    # Crear una estructura que represente el diccionario
+                    struct_type = ir.LiteralStructType([key_ir_type, value_ir_type])
+                    tipo_variable = ir.PointerType(struct_type)
+                
+                ls_tipos_argumentos.append(tipo_variable)
+
             valor = ls_tipos_argumentos
             
         # RETORNO
@@ -270,14 +295,13 @@ class GeneradorCodigo:
                 else:
                     valor = dependencia.srem(left_var, right_var, name=asignacion) if asignacion else dependencia.srem(left_var, right_var)
             
-            
         # ASIGNACIONES
         elif type(expresion_analizada) == ast.Assign:
             
             target = self.generar_codigo(expresion_analizada.targets[0], dependencia)
         
             if isinstance(target, str):
-                # Si el target es un string puro, debe generase su código y agregarse como variable disponible            
+                # Si el target es un string puro, debe generarse su código y agregarse como variable disponible            
                 valor = self.generar_codigo(expresion_analizada.value, dependencia, asignacion=target)
                 
                 # Registro de la variable en el diccionario
@@ -309,11 +333,14 @@ class GeneradorCodigo:
         # NOMBRE / VARIABLE
         elif type(expresion_analizada) == ast.Name:
             
-            # Artículado a ASIGNACIONES
+            # Articulado a ASIGNACIONES
             # Se retorna el objeto IR siempre que exista en las variables disponibles globales
-            # En caso contrarío, se resuelve un str para su posterior declaración
+            # En caso contrario, se resuelve un str para su posterior declaración
             if expresion_analizada.id in self.variables_disponibles:
-                valor = self.variables_disponibles[ expresion_analizada.id ]
+                valor = self.variables_disponibles[expresion_analizada.id]
+                # Si la variable es un puntero, cargar el valor apuntado
+                if isinstance(valor.type, ir.PointerType):
+                    valor = dependencia.load(valor)
             else:
                 valor = expresion_analizada.id
         
@@ -340,12 +367,82 @@ class GeneradorCodigo:
         
         # LISTA
         elif type(expresion_analizada) == ast.List:
-            pass
+            elementos = [self.generar_codigo(el, dependencia) for el in expresion_analizada.elts]
+            if len(elementos) > 0:
+                tipo_elemento = elementos[0].type
+                tipo_lista = ir.ArrayType(tipo_elemento, len(elementos))
+                alloca = dependencia.alloca(tipo_lista, name=asignacion)
+                for i, elemento in enumerate(elementos):
+                    ptr = dependencia.gep(alloca, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), i)], inbounds=True)
+                    dependencia.store(elemento, ptr)
+                valor = alloca
+            else:
+                raise ValueError("No se puede generar una lista vacía sin tipo.")
         
+        # BUCLE FOR
+        elif type(expresion_analizada) == ast.For:
+            iter_var = expresion_analizada.target.id
+            iter_list = self.generar_codigo(expresion_analizada.iter, dependencia)
+
+            loop_block = dependencia.append_basic_block(name="loop")
+            after_loop_block = dependencia.append_basic_block(name="afterloop")
+
+            # Inicializar el índice del bucle
+            index = ir.Constant(ir.IntType(32), 0)
+            index_alloca = dependencia.alloca(index.type, name="index")
+            dependencia.store(index, index_alloca)
+
+            # Obtener el tamaño de la lista
+            size = ir.Constant(ir.IntType(32), iter_list.type.pointee)
+            cmp = dependencia.icmp_signed('<', dependencia.load(index_alloca), size)
+            dependencia.cbranch(cmp, loop_block, after_loop_block)
+
+            # Cuerpo del bucle
+            dependencia.position_at_end(loop_block)
+
+            # Obtener el elemento de la lista
+            index = dependencia.load(index_alloca)
+            element_ptr = dependencia.gep(iter_list, [index], inbounds=True)
+            element = dependencia.load(element_ptr)
+            self.variables_disponibles[iter_var] = element
+
+            # Generar el cuerpo del bucle
+            for stmt in expresion_analizada.body:
+                self.generar_codigo(stmt, dependencia)
+
+            # Incrementar el índice
+            next_index = dependencia.add(index, ir.Constant(ir.IntType(32), 1))
+            dependencia.store(next_index, index_alloca)
+
+            # Saltar al inicio del bucle
+            cmp = dependencia.icmp_signed('<', dependencia.load(index_alloca), size)
+            dependencia.cbranch(cmp, loop_block, after_loop_block)
+
+            # Después del bucle
+            dependencia.position_at_end(after_loop_block)
+
         # DICCIONARIO
         elif type(expresion_analizada) == ast.Dict:
-            pass
-
+            # Inicializar la estructura del diccionario
+            num_elements = len(expresion_analizada.keys)
+            keys_type = ir.ArrayType(ir.IntType(32), num_elements)
+            values_type = ir.ArrayType(ir.IntType(32), num_elements)
+            keys_alloca = dependencia.alloca(keys_type, name="keys")
+            values_alloca = dependencia.alloca(values_type, name="values")
+            
+            # Almacenar las claves y los valores
+            for i, (key, value) in enumerate(zip(expresion_analizada.keys, expresion_analizada.values)):
+                key_val = self.generar_codigo(key, dependencia)
+                value_val = self.generar_codigo(value, dependencia)
+                
+                key_ptr = dependencia.gep(keys_alloca, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), i)], inbounds=True)
+                value_ptr = dependencia.gep(values_alloca, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), i)], inbounds=True)
+                
+                dependencia.store(key_val, key_ptr)
+                dependencia.store(value_val, value_ptr)
+                
+            valor = (keys_alloca, values_alloca)
+        
         # INVOCACIÓN
         elif type(expresion_analizada) == ast.Call:
             pass
@@ -369,6 +466,20 @@ if __name__ == "__main__":
         resultado = a + b
     return resultado
 '''
+
+        contenido3 = '''def sumar_lista(lista: list[int]) -> int:
+    suma: int = 0
+    for numero in lista:
+        suma += numero
+    return suma
+'''
+
+        contenido4 = '''def procesar_diccionario(dic: dict[int, float]) -> float:
+    suma: float = 0.0
+    for clave in dic:
+        suma += dic[clave]
+    return suma
+'''
     # def es_par(numero:int) -> int:
     #     return numero % 2 == 0
 
@@ -389,7 +500,7 @@ if __name__ == "__main__":
 
         dependencia = ir.Module(name="dependencia_principal")
 
-        expresion_analizada = ast.parse(contenido)
+        expresion_analizada = ast.parse(contenido4)
         #print(ast.dump(expresion_analizada))
         
         genCode = GeneradorCodigo(expresion_analizada)
@@ -403,4 +514,3 @@ if __name__ == "__main__":
         # print( analizador_semantico.tabla_simbolos )
         
         #print(ast.dump(expresion_analizada, indent=4))
-        

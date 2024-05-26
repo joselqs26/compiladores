@@ -36,6 +36,22 @@ class GeneradorCodigo:
             type_interno = string_type.replace( "list[", '' ).replace( "]", '' )
             return ir.ArrayType( self.get_ir_type(type_interno) , lenght)
 
+    # Función de cohersion de tipos - Convierte una variable dada 
+    # de un tipo a otro en el flujo del programa
+    # dependencia         -> Objeto contexto de la librería IR. Normalmente un módulo o contructor
+    #                        Permite la adicion de operaciones, variables y contextos de forma incremental
+    # variable            -> Variable a convertir
+    # tipo_final          -> Tipo final en el que se retornará la variable a convertir
+    def transform_type(self, dependencia, variable, tipo_final):
+        variable_transformada = variable
+        
+        if type( variable.type ) == tipo_final:
+            return variable
+        elif type( variable.type ) == ir.IntType and tipo_final == ir.FloatType:
+            variable_transformada = dependencia.sitofp(variable, ir.FloatType())
+            
+        return variable_transformada
+
     # Función recursiva de generación de código
     # expresion_analizada -> Nodo de la librería AST. Permite recorrer el árbol 
     # dependencia         -> Objeto contexto de la librería IR. Normalmente un módulo o contructor
@@ -52,6 +68,7 @@ class GeneradorCodigo:
                  self.generar_codigo( item, dependencia )
             
             valor = dependencia
+        
         # DEFINICION DE FUNCION
         elif type(expresion_analizada) == ast.FunctionDef:
             
@@ -120,79 +137,91 @@ class GeneradorCodigo:
             pass
         
         # OPERACION BINARIA
-        elif type(expresion_analizada) == ast.BinOp:
+        elif type(expresion_analizada) == ast.BinOp:            
+            left_var = self.generar_codigo( expresion_analizada.left, dependencia)
+            right_var = self.generar_codigo( expresion_analizada.right, dependencia)
             
-            # Operación Suma
             if type(expresion_analizada.op) == ast.Add: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
                 
                 # Suma de Float
                 if type( left_var.type ) == ir.FloatType or type( right_var.type ) == ir.FloatType:
                     
                     # Cohersión de tipos de entero a float
-                    if type( left_var.type ) == ir.IntType:
-                        left_var = dependencia.sitofp(left_var, ir.FloatType())
-                    if type( right_var.type ) == ir.IntType:
-                        right_var = dependencia.sitofp(right_var, ir.FloatType())
+                    left_var = self.transform_type( dependencia, left_var, ir.FloatType)
+                    right_var = self.transform_type( dependencia, right_var, ir.FloatType)
                     
-                    if asignacion is None:
-                        # Registro de operación suma sin asignación a variable
-                        valor = dependencia.fadd( left_var, right_var )
-                    else:    
-                        # Registro de operación suma con asignación a variable
-                        valor = dependencia.fadd( left_var, right_var, name=asignacion )    
+                    valor = dependencia.fadd(left_var, right_var, name=asignacion) if asignacion else dependencia.fadd(left_var, right_var)
                 
                 # Suma de Int
-                elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
-                    if asignacion is None:
-                        # Registro de operación suma sin asignación a variable
-                        valor = dependencia.add( left_var, right_var )
-                    elif type( left_var.type ) == ir.IntType or type( right_var.type ) == ir.IntType:
-                        # Registro de operación suma con asignación a variable
-                        valor = dependencia.add( left_var, right_var, name=asignacion )
+                elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
+                    valor = dependencia.add(left_var, right_var, name=asignacion) if asignacion else dependencia.sub(left_var, right_var)
 
-            elif type(expresion_analizada.op) == ast.Sub: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
+            elif type(expresion_analizada.op) == ast.Sub:
+                
+                # Resta de Float
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    
+                    # Cohersión de tipos de entero a float
+                    left_var = self.transform_type( dependencia, left_var, ir.FloatType)
+                    right_var = self.transform_type( dependencia, right_var, ir.FloatType)
+                    
+                    valor = dependencia.fsub(left_var, right_var, name=asignacion) if asignacion else dependencia.fsub(left_var, right_var)
+                
+                # Resta de Int
+                elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
+                    valor = dependencia.sub(left_var, right_var, name=asignacion) if asignacion else dependencia.sub(left_var, right_var)
+
+            elif type(expresion_analizada.op) == ast.Mult:
+                
+                # Multiplicación de Float
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    
+                    # Cohersión de tipos de entero a float
+                    left_var = self.transform_type( dependencia, left_var, ir.FloatType)
+                    right_var = self.transform_type( dependencia, right_var, ir.FloatType)
+                    
+                    valor = dependencia.fmul(left_var, right_var, name=asignacion) if asignacion else dependencia.fmul(left_var, right_var)
+                
+                # Multiplicación de Int
+                elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
+                    valor = dependencia.mul(left_var, right_var, name=asignacion) if asignacion else dependencia.mul(left_var, right_var)
+
+            elif type(expresion_analizada.op) == ast.Div:
+                
+                # División de Float
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    
+                    # Cohersión de tipos de entero a float
+                    left_var = self.transform_type( dependencia, left_var, ir.FloatType)
+                    right_var = self.transform_type( dependencia, right_var, ir.FloatType)
+                    
+                    valor = dependencia.fdiv(left_var, right_var, name=asignacion) if asignacion else dependencia.fdiv(left_var, right_var)
+                
+                # División de Int
+                elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
+                    valor = dependencia.sdiv(left_var, right_var, name=asignacion) if asignacion else dependencia.sdiv(left_var, right_var)
+
+            elif type(expresion_analizada.op) == ast.FloorDiv:
+                
+                # División entera de Float
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    raise TypeError("Floor division no es compatible con float.")
+                
+                # División entera de Int
+                elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
+                    valor = dependencia.sdiv(left_var, right_var, name=asignacion) if asignacion else dependencia.sdiv(left_var, right_var)
 
 
-
-            elif type(expresion_analizada.op) == ast.Mult: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-
-            elif type(expresion_analizada.op) == ast.Div: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-
-            elif type(expresion_analizada.op) == ast.FloorDiv: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-            elif type(expresion_analizada.op) == ast.Mod: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-
-            elif type(expresion_analizada.op) == ast.Pow: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-
-            elif type(expresion_analizada.op) == ast.MatMult: 
-                left_var = self.generar_codigo( expresion_analizada.left, dependencia)
-                right_var = self.generar_codigo( expresion_analizada.right, dependencia)
-
-
-
+            elif type(expresion_analizada.op) == ast.Mod:
+                
+                # Módulo de Float
+                if type(left_var.type) == ir.FloatType or type(right_var.type) == ir.FloatType:
+                    raise TypeError("Modulo no es compatible con float.")
+                
+                # Módulo de Int
+                else:
+                    valor = dependencia.srem(left_var, right_var, name=asignacion) if asignacion else dependencia.srem(left_var, right_var)
+            
             
         # ASIGNACIONES
         elif type(expresion_analizada) == ast.Assign:

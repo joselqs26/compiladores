@@ -11,6 +11,7 @@ class GeneradorCodigo:
     # Expresion y objeto para la generacion de la tabla de símbolos
     expresion_general = None
     analizador_semantico = None
+    modulo_computado = None
     
     # Diccionario general de variables disponibles como objetos de la libreria IR
     variables_disponibles = {}
@@ -20,6 +21,7 @@ class GeneradorCodigo:
         self.expresion_general = expresion_general
         analizador_semantico = AnalizadorSemantic()
         analizador_semantico.analizar(self.expresion_general)
+        self.modulo_computado = ir.Module(name="dependencia_principal")
         self.analizador_semantico = analizador_semantico
         self.variables_disponibles = {}
 
@@ -37,6 +39,13 @@ class GeneradorCodigo:
             return ir.ArrayType( self.get_ir_type(type_interno) , length)
         elif "dict" in string_type:
             return ir.PointerType(ir.IntType(8))  # Simplification for a dictionary type
+
+    # Función de creación de archivo para ejecución de código
+    # Almacena el codigo en el archivo con el nombre enviado como parametro 
+    def guardar_codigo_intermedio(self, name_file):
+        with open(name_file, 'w') as archivo:
+            archivo.write(str( self.modulo_computado ))
+        print(f"Módulo guardado en {name_file}")
 
     # Función de cohersion de tipos - Convierte una variable dada 
     # de un tipo a otro en el flujo del programa
@@ -59,17 +68,36 @@ class GeneradorCodigo:
     # dependencia         -> Objeto contexto de la librería IR. Normalmente un módulo o contructor
     #                        Permite la adicion de operaciones, variables y contextos de forma incremental
     # asignacion          -> Auxiliar para la creación de nuevas variables
-    def generar_codigo(self, expresion_analizada, dependencia, asignacion = None ):
+    def generar_codigo(self, expresion_analizada = None, dependencia = None, asignacion = None ):
         valor = None
         
         # CUERPO PRINCIPAL
-        if type(expresion_analizada) == ast.Module:
+        if expresion_analizada is None and type(self.expresion_general) == ast.Module:
+            
+            tipo_retorno_main = ir.FloatType()
+            tipos_argumentos_main = []
+
+            # Crear la firma de la función main.
+            funcion_tipo_main = ir.FunctionType(tipo_retorno_main, tipos_argumentos_main)
+
+            # Crear la función main.
+            funcion_main = ir.Function( self.modulo_computado , funcion_tipo_main, name="main")
+
+            # Crear un bloque de entrada para la función main.
+            bloque_main = funcion_main.append_basic_block(name="main")
+            constructor_main = ir.IRBuilder(bloque_main)
+            
+            items = []
             
             # Se genera el código para cada apartado independiente del body general
-            for item in expresion_analizada.body:
-                 self.generar_codigo( item, dependencia )
+            for item in self.expresion_general.body:
+                items_val = self.generar_codigo( item, constructor_main ) 
+                items.append( items_val )
+                
+            funcion_main.function_type.return_type = items[ len( items ) - 1 ].type 
             
-            valor = dependencia
+            var_return = str( items[ len( items ) - 1 ] ).split( '=' )[0]
+            constructor_main.ret( self.variables_disponibles[ var_return ] )
         
         # DEFINICION DE FUNCION
         elif type(expresion_analizada) == ast.FunctionDef:
@@ -82,7 +110,9 @@ class GeneradorCodigo:
             # Genera la firma de la función
             funcion_tipo = ir.FunctionType(tipo_retorno, tipos_argumentos)
             # Genera la estructura de la función en el contexto
-            funcion = ir.Function(dependencia, funcion_tipo, name=expresion_analizada.name)
+            funcion = ir.Function(self.modulo_computado, funcion_tipo, name=expresion_analizada.name)
+            
+            self.variables_disponibles[ expresion_analizada.name ] = funcion
             
             # Crear el bloque inicial para las asignaciones
             bloque_inicio = funcion.append_basic_block(name="entry")
@@ -108,8 +138,11 @@ class GeneradorCodigo:
                 self.variables_disponibles[arg_semantico.arg] = arg_alloca
 
             # Crear el bloque para el cuerpo de la función
-            bloque = funcion.append_basic_block(name="Cuerpo de Funcion")
+            bloque = funcion.append_basic_block(name="function_body")
             constructor.position_at_end(bloque)
+
+            # bloque = funcion.append_basic_block(name="function_body")
+            # constructor = ir.IRBuilder(bloque)
             
             # Se genera el código para cada apartado independiente del cuerpo de la función
             for item in expresion_analizada.body:
@@ -179,19 +212,39 @@ class GeneradorCodigo:
             for operation, right in zip(expresion_analizada.ops, expresion_analizada.comparators):
                 right_val = self.generar_codigo(right, dependencia)
 
-                if isinstance(operation, ast.Eq):
-                    valor = dependencia.icmp_signed('==', left_val, right_val)
-                elif isinstance(operation, ast.NotEq):
-                    valor = dependencia.icmp_signed('!=', left_val, right_val)
-                elif isinstance(operation, ast.Lt):
-                    valor = dependencia.icmp_signed('<', left_val, right_val)
-                elif isinstance(operation, ast.LtE):
-                    valor = dependencia.icmp_signed('<=', left_val, right_val)
-                elif isinstance(operation, ast.Gt):
-                    valor = dependencia.icmp_signed('>', left_val, right_val)
-                elif isinstance(operation, ast.GtE):
-                    valor = dependencia.icmp_signed('>=', left_val, right_val)
-            pass
+                if type( left_val.type ) == ir.FloatType or type( right_val.type ) == ir.FloatType:
+                    
+                    # Cohersión de tipos de entero a float
+                    left_val = self.transform_type( dependencia, left_val, ir.FloatType)
+                    right_val = self.transform_type( dependencia, right_val, ir.FloatType)
+                    
+                    if isinstance(operation, ast.Eq):
+                        valor = dependencia.fcmp_ordered('==', left_val, right_val)
+                    elif isinstance(operation, ast.NotEq):
+                        valor = dependencia.fcmp_ordered('!=', left_val, right_val)
+                    elif isinstance(operation, ast.Lt):
+                        valor = dependencia.fcmp_ordered('<', left_val, right_val)
+                    elif isinstance(operation, ast.LtE):
+                        valor = dependencia.fcmp_ordered('<=', left_val, right_val)
+                    elif isinstance(operation, ast.Gt):
+                        valor = dependencia.fcmp_ordered('>', left_val, right_val)
+                    elif isinstance(operation, ast.GtE):
+                        valor = dependencia.fcmp_ordered('>=', left_val, right_val)
+
+                elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
+
+                    if isinstance(operation, ast.Eq):
+                        valor = dependencia.icmp_signed('==', left_val, right_val)
+                    elif isinstance(operation, ast.NotEq):
+                        valor = dependencia.icmp_signed('!=', left_val, right_val)
+                    elif isinstance(operation, ast.Lt):
+                        valor = dependencia.icmp_signed('<', left_val, right_val)
+                    elif isinstance(operation, ast.LtE):
+                        valor = dependencia.icmp_signed('<=', left_val, right_val)
+                    elif isinstance(operation, ast.Gt):
+                        valor = dependencia.icmp_signed('>', left_val, right_val)
+                    elif isinstance(operation, ast.GtE):
+                        valor = dependencia.icmp_signed('>=', left_val, right_val)
             
         # OPERACION BOOLEANA
         elif type(expresion_analizada) == ast.BoolOp:
@@ -207,7 +260,6 @@ class GeneradorCodigo:
                     next_val = self.generar_codigo(value, dependencia)
                     initial = dependencia.or_(initial, next_val)
                 valor = initial
-            pass
         
         # OPERACION BINARIA
         elif type(expresion_analizada) == ast.BinOp:            
@@ -227,7 +279,7 @@ class GeneradorCodigo:
                 
                 # Suma de Int
                 elif type( left_var.type ) == ir.IntType and type( right_var.type ) == ir.IntType:
-                    valor = dependencia.add(left_var, right_var, name=asignacion) if asignacion else dependencia.sub(left_var, right_var)
+                    valor = dependencia.add(left_var, right_var, name=asignacion) if asignacion else dependencia.add(left_var, right_var)
 
             elif type(expresion_analizada.op) == ast.Sub:
                 
@@ -306,9 +358,8 @@ class GeneradorCodigo:
                 
                 # Registro de la variable en el diccionario
                 ir_type = self.get_ir_type(self.analizador_semantico.obtener_informacion_variable(target)["type"])
-                alloca = dependencia.alloca(ir_type, name=target)
-                dependencia.store(valor, alloca)
-                self.variables_disponibles[target] = alloca
+                
+                self.variables_disponibles[target] = valor
                 
             else:
                 # Si el target es una clase más compleja como una variable existente,
@@ -445,10 +496,22 @@ class GeneradorCodigo:
         
         # INVOCACIÓN
         elif type(expresion_analizada) == ast.Call:
-            pass
+            ls_tipos_argumentos = []
+            
+            # Cálcula el tipo IR para cada argumento de una función
+            for item in expresion_analizada.args:
+                variable = self.generar_codigo( item, dependencia )
+                ls_tipos_argumentos.append( variable )
+            
+            valor = dependencia.call(
+                self.variables_disponibles[ expresion_analizada.func.id ], 
+                ls_tipos_argumentos
+            )
         
         elif type(expresion_analizada) == ast.Expr:
             valor = self.generar_codigo( expresion_analizada.value, dependencia )
+            
+        self.variables_disponibles[ str( valor ).split( '=' )[0] ] = valor
         return valor
 
 if __name__ == "__main__":
@@ -456,7 +519,8 @@ if __name__ == "__main__":
         contenido = '''def calcular_suma(a: float, b: int) -> float:
     resultado = a + b
     return resultado
-
+    
+calcular_suma(3.0, 4)
 '''
         contenido2 = '''def calcular_suma(a: float, b: int) -> float:
     resultado:float = 0.0
@@ -465,6 +529,8 @@ if __name__ == "__main__":
     else:
         resultado = a + b
     return resultado
+    
+calcular_suma(3.0, 4)
 '''
 
         contenido3 = '''def sumar_lista(lista: list[int]) -> int:
@@ -500,13 +566,15 @@ if __name__ == "__main__":
 
         dependencia = ir.Module(name="dependencia_principal")
 
+        # expresion_analizada = ast.parse(contenido)
+        # expresion_analizada = ast.parse(contenido2)
+        # expresion_analizada = ast.parse(contenido3)
         expresion_analizada = ast.parse(contenido4)
         #print(ast.dump(expresion_analizada))
         
         genCode = GeneradorCodigo(expresion_analizada)
-        moduloComputado = genCode.generar_codigo(expresion_analizada, dependencia)
-        
-        print( moduloComputado )
+        genCode.generar_codigo()
+        genCode.guardar_codigo_intermedio( "codigo_intermedio.ll" )
         
         # analizador_semantico = AnalizadorSemantico()
         # arbol_abstracto = analizador_sintactico.generar_codigo("codigo_tres.txt")
